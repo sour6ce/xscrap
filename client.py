@@ -32,7 +32,7 @@ if __name__ == '__main__':
     client = Client('localhost', 5000)
     client.connect()
 
-    data = 'Hello world!'
+    data = 'https://unsplash.com/es/s/fotos/image'
     client.send_data(data)
     response = client.receive_data()
 

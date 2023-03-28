@@ -17,13 +17,26 @@ class Client:
     # The method continues to receive data in blocks of 1024 bytes until there is no more data to receive.
     def receive_data(self):
         html = b""
-        received = self.socket.recv(1024)
-        if received:
-            html += received
-            #else:
-            #    break
+        while True:
+            received = self.socket.recv(1024)
+            if received:
+                html += received
+            else:
+                break
         return html.decode()
 
     def close(self):
         self.socket.close()
+
+if __name__ == '__main__':
+    client = Client('localhost', 5000)
+    client.connect()
+
+    data = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Funsplash.com%2Fs%2Fphotos%2Fimage&psig=AOvVaw0DP7KyNMc9C47pvukImWMk&ust=1680124656750000&source=images&cd=vfe&ved=0CA8QjRxqFwoTCNi-ppvG__0CFQAAAAAdAAAAABAE'
+    client.send_data(data)
+    response = client.receive_data()
+
+    print('Received:', response)
+
+    client.close()
 

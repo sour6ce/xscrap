@@ -32,7 +32,7 @@ if __name__ == '__main__':
     client = Client('localhost', 5000)
     client.connect()
 
-    data = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Funsplash.com%2Fs%2Fphotos%2Fimage&psig=AOvVaw0DP7KyNMc9C47pvukImWMk&ust=1680124656750000&source=images&cd=vfe&ved=0CA8QjRxqFwoTCNi-ppvG__0CFQAAAAAdAAAAABAE'
+    data = 'https://www.google.com/'
     client.send_data(data)
     response = client.receive_data()
 

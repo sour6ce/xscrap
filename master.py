@@ -64,4 +64,4 @@ def run_test_case(num_clients):
 if __name__ == '__main__':
     test_cases = [3, 5, 7, 8, 10]
     for num_clients in test_cases:
-        run_test_case(num_clients
+        run_test_case(num_clients)

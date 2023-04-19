@@ -41,10 +41,27 @@ class Master:
             worker.stop()
         self.socket.close()
 
-if __name__ == '__main__':
+def run_test_case(num_clients):
     master = Master('localhost', 5000, 2)
     for worker in master.worker_pool:
         worker.start()
     master.start()
+    
+    # crear un número de solicitudes de clientes
+    urls = ['http://google.com', 'http://facebook.com', 'http://twitter.com', 'http://github.com']
+    for i in range(num_clients):
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.connect(('localhost', 5000))
+        url = urls[i % len(urls)]  # ciclar entre las urls
+        client_socket.send(url.encode())
+        
+    # esperar a que se completen todas las solicitudes
+    master.jobs.join()
+    
     master.stop()
+    print(f'Test case with {num_clients} clients completed successfully')
 
+if __name__ == '__main__':
+    test_cases = [3, 5, 7, 8, 10]
+    for num_clients in test_cases:
+        run_test_case(num_clients

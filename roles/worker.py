@@ -13,16 +13,18 @@ register_dict_to_class(
 WORKERNAME = f"Worker_{os.getpid()}@{socket.gethostname()}"
 
 
-def labor(data, timeout: int):  # Function that actually do the job, should be slow
-    # The result is the body of the page or False if the request end in an error
+def labor(data, timeout: int) -> str | int:  # Function that actually do the job, should be slow
+    # The result is the body of the page or a number if the request end in an error
     res = None
 
     # The data for this job is the url of the page to scrap
     try:
         res = requests.get(data, timeout=timeout)
-        res = res.text if (res.status_code // 100) == 2 else False
+        res = res.text if (res.status_code // 100) == 2 else res.status_code
     except Exception as e:
-        res = False
+        res = 0
+
+    return res
 
 
 # Function that process the job calling the labor and storing the result

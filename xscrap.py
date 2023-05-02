@@ -1,5 +1,4 @@
 from fire import Fire
-from enum import Enum
 
 # Roles import
 import roles.client as client
@@ -15,9 +14,6 @@ ROLES = {
     'ns': ns,
 }
 
+ROLES = {k: v.start for k, v in ROLES.items()}
 
-def start(role: str, /, **args):
-    ROLES[role].start(**args)
-
-
-Fire(start)
+Fire(ROLES)

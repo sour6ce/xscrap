@@ -24,4 +24,4 @@ def error(text: str, style: str = 'c_fail', **kwargs):
 
 
 def log(text: str, **kwargs):
-    CONSOLE.log(text, **kwargs)
+    CONSOLE.log(text, _stack_offset=2, **kwargs)

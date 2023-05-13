@@ -5,14 +5,9 @@ from typing import List
 from common.config import *
 from common.job import Job
 from common.printing import *
-from Pyro5.api import Proxy, register_dict_to_class
+from Pyro5.api import Proxy
 from Pyro5.errors import CommunicationError, NamingError
-
 from roles.dispatcher import Dispatcher
-
-# Registered how to cast from dict to class
-register_dict_to_class(
-    f'{Job.__module__}.{Job.__name__}', Job.from_dict)
 
 
 def placework(dispatcher: Dispatcher, urls: List[str]):

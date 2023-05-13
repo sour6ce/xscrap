@@ -5,15 +5,9 @@ import requests
 from common.config import *
 from common.job import Job
 from common.printing import *
-from Pyro5.api import Proxy, locate_ns, register_dict_to_class
+from Pyro5.api import Proxy, register_dict_to_class
 from Pyro5.errors import CommunicationError, NamingError
-from Pyro5.nameserver import NameServer
-
 from roles.dispatcher import Dispatcher
-
-# Registered how to cast from dict to class
-register_dict_to_class(
-    f'{Job.__module__}.{Job.__name__}', Job.from_dict)
 
 
 WORKERNAME = f"Worker_{os.getpid()}@{socket.gethostname()}"

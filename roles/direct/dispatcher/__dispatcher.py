@@ -1,16 +1,12 @@
+
+from Pyro5.api import expose, behavior
 import queue
-from Pyro5.api import expose, behavior, serve, register_dict_to_class
-from Pyro5.errors import NamingError
 from common.job import Job
 from common.printing import *
-from common.config import *
+from rich.status import Status
 
 
-# Registered how to cast from dict to class
-register_dict_to_class(
-    f'{Job.__module__}.{Job.__name__}', Job.from_dict)
-
-status = None
+status: Status = None
 
 
 @expose
@@ -38,7 +34,7 @@ class Dispatcher(object):
             status.renderable.text = old_status
             return j
         except queue.Empty:
-            log(f"No jobs avaiable for a request.")
+            log(f"No jobs available for a request.")
             status.renderable.text = old_status
             raise ValueError("no jobs in queue")
 
@@ -58,29 +54,10 @@ class Dispatcher(object):
         except queue.Empty:
             log(f"No results avaiable for a request.")
             status.renderable.text = old_status
-            raise ValueError("no result avaible")
+            raise ValueError("no result available")
 
     def work_queue_size(self):
         return self.jobsqueue.qsize()
 
     def result_queue_size(self):
         return self.resultqueue.qsize()
-
-
-def start():
-    # Beauty printing. To details go to common.printing
-    print('-- [c_beauty]XSCRAP[/c_beauty] DISPATCHER --', justify='center')
-    print('\nInitializing dispatcher.\n')
-    global status
-    status = CONSOLE.status("Routing jobs...", spinner='line')
-    status.start()
-    # Main Daemon
-    try:
-        serve({
-            Dispatcher: "xscrap.dispatcher"
-        }, host=resolve_host(), port=resolve_hostport(), use_ns=False)
-    # If name server is down
-    except NamingError as e:
-        status.stop()
-        error('Name Server not reachable. Shuting down dispatcher.\n')
-        exit(1)

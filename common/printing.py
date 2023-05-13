@@ -1,3 +1,9 @@
+###############################################################################
+#
+# COMMON CODE RELATED TO SHOW INFO IN CONSOLE
+#
+###############################################################################
+
 from rich.themes import Theme
 from rich.console import Console
 

@@ -2,13 +2,13 @@ import os
 import socket
 
 import requests
-from common.config import *
+from common.environment import *
 from common.job import Job
 from common.printing import *
+from common.setup import *
 from Pyro5.api import Proxy, register_dict_to_class
 from Pyro5.errors import CommunicationError, NamingError
 from roles.dispatcher import Dispatcher
-
 
 WORKERNAME = f"Worker_{os.getpid()}@{socket.gethostname()}"
 

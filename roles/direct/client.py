@@ -2,9 +2,10 @@ import os
 from os import path
 from typing import List
 
-from common.config import *
+from common.environment import *
 from common.job import Job
 from common.printing import *
+from common.setup import *
 from Pyro5.api import Proxy
 from Pyro5.errors import CommunicationError, NamingError
 from roles.dispatcher import Dispatcher

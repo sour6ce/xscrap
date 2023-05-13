@@ -1,11 +1,11 @@
+###############################################################################
+#
+# COMMON CODE RELATED TO ENVIRONMENT VARIABLES
+#
+###############################################################################
+
 import os
 import socket
-from common.job import Job
-from Pyro5.api import register_dict_to_class
-
-# Registered how to cast from dict to class
-register_dict_to_class(
-    f'{Job.__module__}.{Job.__name__}', Job.from_dict)
 
 
 def resolve_host():

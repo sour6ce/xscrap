@@ -1,6 +1,8 @@
+from common.environment import *
 from common.printing import *
-from common.config import *
+from common.setup import *
 from Pyro5.api import serve
+
 from .__dispatcher import *
 
 

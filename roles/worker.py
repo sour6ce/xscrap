@@ -1,16 +1,14 @@
 import os
-from common.job import Job
-from Pyro5.api import Proxy, register_dict_to_class
 import socket
+
 import requests
-from roles.dispatcher import Dispatcher
+from common.environment import *
+from common.job import Job
 from common.printing import *
-from Pyro5.errors import NamingError, CommunicationError
-
-# Registered how to cast from dict to class
-register_dict_to_class(
-    f'{Job.__module__}.{Job.__name__}', Job.from_dict)
-
+from common.setup import *
+from Pyro5.api import Proxy, register_dict_to_class
+from Pyro5.errors import CommunicationError, NamingError
+from roles.dispatcher import Dispatcher
 
 WORKERNAME = f"Worker_{os.getpid()}@{socket.gethostname()}"
 
@@ -40,28 +38,31 @@ def start(timeout=10):
     print('-- [c_beauty]XSCRAP[/c_beauty] WORKER --', justify='center')
     print(f'\nInitializing {WORKERNAME}.\n')
 
+    dispatcher: Dispatcher
+
     # Checking if dispatcher is up
     with CONSOLE.status("Checking connection with dispatcher...", spinner='line') as status:
-        with Proxy('PYRONAME:xscrap.dispatcher') as disp:
-            try:
-                disp._pyroBind()
-                uri = disp._pyroUri
-                # Good
-                print(
-                    f'Successfully connected to dispatcher in {uri.host}:{uri.port}\n',
-                    style='c_good')
-            # If dispatcher is down
-            except CommunicationError as e:
-                status.stop()
-                error('Dispatcher not reachable. Shuting down worker.\n')
-                exit(1)
-            # If name server is down
-            except NamingError as e:
-                status.stop()
-                error('Name Server not reachable. Shuting down worker.\n')
-                exit(1)
-
-    dispatcher: Dispatcher = Proxy("PYRONAME:xscrap.dispatcher")
+        log(
+            f"Searching for dispatcher at {resolve_dispatcher()}:{resolve_dispatcher_port()}")
+        dispatcher = Proxy(
+            f'PYRO:xscrap.dispatcher@{resolve_dispatcher()}:{resolve_dispatcher_port()}')
+        try:
+            dispatcher._pyroBind()
+            uri = dispatcher._pyroUri
+            # Good
+            print(
+                f'Successfully connected to dispatcher in {uri.host}:{uri.port}\n',
+                style='c_good')
+        # If dispatcher is down
+        except CommunicationError as e:
+            status.stop()
+            error('Dispatcher not reachable. Shuting down worker.\n')
+            exit(1)
+        # If name server is down
+        except NamingError as e:
+            status.stop()
+            error('Name Server not reachable. Shuting down worker.\n')
+            exit(1)
 
     status = CONSOLE.status("Waiting for job...", spinner='line')
     status.start()

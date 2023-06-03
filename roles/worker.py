@@ -29,7 +29,7 @@ def labor(data, timeout: int) -> str | int:  # Function that actually do the job
 
 # Function that process the job calling the labor and storing the result
 def process(job: Job, timeout):
-    job.result = labor(job.data, timeout)
+    job.result = labor(job.url, timeout)
     job.processedBy = WORKERNAME
 
 
@@ -75,14 +75,14 @@ def start(timeout=10):
         else:
             old_status = status.renderable.text
             status.renderable.text = "Working..."
-            log(f"Job assigned. Fetching HTML: {job.data}.")
+            log(f"Job assigned. Fetching HTML: {job.url}.")
             process(job, timeout=timeout)
-            log(f"Fetch {job.data} gives {job.result if isinstance(job.result,int) else 'an HTML.'}")
+            log(f"Fetch {job.url} gives {job.result if isinstance(job.result,int) else 'an HTML.'}")
             if isinstance(job.result, str):
-                print(f'HTML successfully fetched: {job.data}.', style='c_good')
+                print(f'HTML successfully fetched: {job.url}.', style='c_good')
             if isinstance(job.result, int):
                 print(
-                    f'HTML fetching failed: {job.data}. Error:{job.result}',
+                    f'HTML fetching failed: {job.url}. Error:{job.result}',
                     style='c_fail')
             log(f"Saving result.")
             dispatcher.put_result(job)

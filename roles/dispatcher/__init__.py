@@ -10,9 +10,6 @@ def start():
     # Beauty printing. To details go to common.printing
     print('-- [c_beauty]XSCRAP[/c_beauty] DISPATCHER --', justify='center')
     print('\nInitializing dispatcher.\n')
-    global status
-    status = CONSOLE.status("Routing jobs...", spinner='line')
-    status.start()
     # Main Daemon
     serve({
         Dispatcher: "xscrap.dispatcher"

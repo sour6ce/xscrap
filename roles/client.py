@@ -32,7 +32,7 @@ def writeresults(dispatcher: Dispatcher, count: int):
             i += 1
         except Exception as e:
             error(
-                f'Error writing results in file {file_name} for {result.data}. Shuting down client.\n')
+                f'Error writing results in file {file_name} for {result.url}. Shuting down client.\n')
 
 
 def start():

@@ -13,5 +13,5 @@ from common.job import Job
 register_dict_to_class(
     f'{Job.__module__}.{Job.__name__}', Job.from_dict)
 
-Pyro5.config.COMPRESSION=True
-Pyro5.config.SERIALIZER='marshal'
+Pyro5.config.COMPRESSION = True
+Pyro5.config.SERIALIZER = 'marshal'

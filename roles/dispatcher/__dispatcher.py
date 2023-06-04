@@ -66,14 +66,14 @@ class Dispatcher(object):
         if there is already a result stored in cache.
         '''
         # Lock forces to allow only this method to change values in that key
-        with self.r_server.lock(PENDING_KEY, thread_local=False):
+        with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
             self.r_server.rpush(PENDING_KEY, *url)
 
     def _clear_cache_single(self, url: str):
         '''Delete the cache result for a given url.'''
         url_key = build_cache_key(url)
 
-        with self.r_server.lock(url_key, thread_local=False):
+        with self.r_server.lock(url_key+"_lock_", thread_local=False):
             self.r_server.delete(url_key)
 
     def _clear_cache(self, urls: List[str]):
@@ -109,7 +109,7 @@ class Dispatcher(object):
 
         url: str = ''
 
-        with self.r_server.lock(PENDING_KEY, thread_local=False):
+        with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
             url = self.r_server.lpop(PENDING_KEY)
 
         log(f'Job given: {url}.')

@@ -57,8 +57,8 @@ class Dispatcher(object):
                     "Connection to redis server failed.")
         except Exception as e:
             print(
-                f'Encounter ERROR: {e} Trying again in {br/1000.0:.2f} seconds.')
-            time.sleep(br/1000.0)
+                f'Encounter ERROR: {e} Trying again in {10.0:.2f} seconds.')
+            time.sleep(10.0)
 
     async def _send_pending(self, *url: str):
         '''
@@ -70,7 +70,7 @@ class Dispatcher(object):
             self.r_server.rpush(PENDING_KEY, *url)
 
     @overload
-    async def clear_cache(self, url: str):
+    async def _clear_cache(self, url: str):
         '''Delete the cache result for a given url.'''
         url_key = build_cache_key(url)
 
@@ -78,43 +78,57 @@ class Dispatcher(object):
             self.r_server.delete(url_key)
 
     @overload
-    async def clear_cache(self, urls: List[str]):
+    async def _clear_cache(self, urls: List[str]):
         '''Delete the cache result for a list of urls.'''
-        await asyncio.gather(*[self.clear_cache(url) for url in urls])
+        await asyncio.gather(*[self._clear_cache(url) for url in urls])
+
+    async def _clear_cache(self, urls: Any):
+        raise TypeError("urls")
 
     @overload
-    async def retrieve_cache(self, url: str) -> dict | None:
+    async def _retrieve_cache(self, url: str) -> dict | None:
         '''Retrieve result stored for a given url. If there's no cache for that url return None.'''
         result = self.r_server.get(build_cache_key(url))
         return result if result is None else eval(result)
 
     @overload
-    async def retrieve_cache(self, urls: List[str]) -> List[dict | None]:
+    async def _retrieve_cache(self, urls: List[str]) -> List[dict | None]:
         '''Retrieve results stored for all given urls. If there's no cache for an url return None.'''
-        return await asyncio.gather(*[self.retrieve_cache(url) for url in urls])
+        return await asyncio.gather(*[self._retrieve_cache(url) for url in urls])
+
+    async def _retrieve_cache(self, urls: Any):
+        raise TypeError('urls')
 
     @overload
-    async def put_work(self, url: str):
+    def put_work(self, url: str):
         log(f"Arrived new job: {url}.")
-        await asyncio.gather(self._send_pending(url), self.clear_cache(url))
+        asyncio.run(asyncio.gather(
+            self._send_pending(url),
+            self._clear_cache(url)))
 
     @overload
-    async def put_work(self, url: Job):
-        await self.put_work(url.url)
+    def put_work(self, url: Job):
+        self.put_work(url.url)
 
     @overload
-    async def put_work(self, urls: List[str]):
+    def put_work(self, urls: List[str]):
         sep = "\n\t"
         log(f'Arrived batch job: \n[\n\t{sep.join(urls)}\n]')
 
-        await asyncio.gather(self._send_pending(*urls), self.clear_cache(urls))
+        asyncio.run(
+            asyncio.gather(
+                self._send_pending(*urls),
+                self._clear_cache(urls)))
 
     @overload
-    async def put_work(self, urls: list):
+    def put_work(self, urls: list):
         urls = [str(item) for item in urls]
-        await self.put_work(urls)
+        self.put_work(urls)
 
-    async def get_work(self, count: int = 1) -> List[str]:
+    def put_work(self, url: Job):
+        raise TypeError('url')
+
+    def get_work(self, count: int = 1) -> List[str]:
         log(f'Request for a job.')
 
         if self.r_server.llen(PENDING_KEY) == 0:
@@ -133,31 +147,25 @@ class Dispatcher(object):
 
         return [url] if isinstance(url, str) else url
 
-    @overload
-    async def put_result(self, url: str, body: str) -> None:
-        log(f'Arrived result for job: {url} with status {200}')
+    def put_result(self, url: str, body: str, status_code: int = 200):
+        log(f'Arrived result for job: {url} with status {status_code}')
         self.r_server.set(
             build_cache_key(url),
             repr({'body': body, 'status': 200}))
 
-    @overload
-    async def put_result(self, url: str, body: str, status_code: int = 200) -> List[dict | None]:
-        log(f'Arrived result for job: {url} with status {status_code}')
-        self.r_server.set(build_cache_key(url), repr({'status': status_code}))
-
-    async def get_result(self, urls: List[str]) -> List[dict | None]:
+    def get_result(self, urls: List[str]) -> List[dict | None]:
         sep = "\n\t"
         log(f'Request for results on: \n[\n\t{sep.join(urls)}\n]')
-        r = await self.retrieve_cache(urls)
+        r = asyncio.run(self._retrieve_cache(urls))
 
         pending_urls = [url for res, url in zip(r, urls) if res is None]
 
-        await self.put_work(pending_urls)
+        asyncio.run(self.put_work(pending_urls))
 
         return r
 
-    async def get_result(self, url: str) -> dict | None:
-        return (await self.get_result([url]))[0]
+    def get_result(self, url: str) -> dict | None:
+        return (self.get_result([url]))[0]
 
     def pending_size(self):
         return self.r_server.llen(PENDING_KEY)

@@ -27,7 +27,6 @@ class Job(object):
     def from_dict(classname, d):
         """Method used to deserialize a job from Pyro"""
         job = Job(d["url"], d["itemId"])
-        job.result = None if d["result"] == 'None' else False if d["result"].lower(
-        ) == 'false' else d["result"]
+        job.result = d["result"]
         job.processedBy = d["processedBy"]
         return job

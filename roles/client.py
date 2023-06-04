@@ -12,8 +12,7 @@ from roles.dispatcher import Dispatcher
 
 
 def placework(dispatcher: Dispatcher, urls: List[str]):
-    for url in urls:
-        dispatcher.put_work(Job(url))
+    dispatcher.put_work(urls)
 
 
 def writeresults(dispatcher: Dispatcher, count: int):

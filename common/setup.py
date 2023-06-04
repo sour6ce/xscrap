@@ -15,3 +15,5 @@ register_dict_to_class(
 
 Pyro5.config.COMPRESSION = True
 Pyro5.config.SERIALIZER = 'marshal'
+
+EARLY_ERROR_STATUS_CODE = 580

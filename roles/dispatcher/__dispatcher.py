@@ -104,7 +104,8 @@ class Dispatcher(object):
 
     @overload
     async def put_work(self, urls: List[str]):
-        log(f'Arrived batch job: \n[\n\t{"\n\t".join(urls)}\n]')
+        sep = "\n\t"
+        log(f'Arrived batch job: \n[\n\t{sep.join(urls)}\n]')
 
         await asyncio.gather(self._send_pending(*urls), self.clear_cache(urls))
 
@@ -145,7 +146,8 @@ class Dispatcher(object):
         self.r_server.set(build_cache_key(url), repr({'status': status_code}))
 
     async def get_result(self, urls: List[str]) -> List[dict | None]:
-        log(f'Request for results on: \n[\n\t{"\n\t".join(urls)}\n]')
+        sep = "\n\t"
+        log(f'Request for results on: \n[\n\t{sep.join(urls)}\n]')
         r = await self.retrieve_cache(urls)
 
         pending_urls = [url for res, url in zip(r, urls) if res is None]

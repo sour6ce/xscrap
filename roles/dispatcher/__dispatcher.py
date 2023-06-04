@@ -53,12 +53,13 @@ class Dispatcher(object):
         '''Check if there is connection to the redis server.'''
         try:
             if not self.r_server.ping():
-                raise redis.ConnectionError(
+                raise Exception(
                     "Connection to redis server failed.")
         except Exception as e:
             print(
-                f'Encounter ERROR: {e} Trying again in {10.0:.2f} seconds.')
-            time.sleep(10.0)
+                f'Encounter ERROR: {e} Trying again in {10.0:.2f} seconds.\n')
+            # TODO: Change the behavior in case of an error in redis connection
+            exit(1)
 
     def _send_pending(self, *url: str):
         '''
@@ -127,9 +128,17 @@ class Dispatcher(object):
         log(f'Request for results on: \n[\n\t{sep.join(urls)}\n]')
         r = (self._retrieve_cache(urls))
 
-        pending_urls = [url for res, url in zip(r, urls) if res is None]
+        log('\n\n:')
+
+        pending_urls = [
+            url for res, url in zip(r, urls)
+            if res is None or res['status'] != 200]
+
+        log(f':{pending_urls}')
 
         (self.put_work(pending_urls))
+
+        log(':\n\n')
 
         return r
 

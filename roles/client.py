@@ -1,5 +1,6 @@
 import os
 from os import path
+import time
 from typing import List
 
 from common.environment import *
@@ -15,23 +16,9 @@ def placework(dispatcher: Dispatcher, urls: List[str]):
     dispatcher.put_work(urls)
 
 
-def writeresults(dispatcher: Dispatcher, count: int):
-    os.makedirs(path.join('.', 'scrapped'), exist_ok=True)
-    i = 0
-    while i < count:
-        try:
-            result = dispatcher.get_result()
-        except ValueError as e:
-            continue
-        try:
-            file_name = path.join('.', 'scrapped', f'result_{i:04d}.json')
-            with open(file_name, mode='wt') as file:
-                file.write(repr(result.__dict__).replace('\\\'', '&&&').replace(
-                    '"', '\\"').replace('\'', '"').replace('&&&', '\''))
-            i += 1
-        except Exception as e:
-            error(
-                f'Error writing results in file {file_name} for {result.url}. Shuting down client.\n')
+def writeresults(dispatcher: Dispatcher, urls: List[str]):
+    while any(True if r is None else False for r in dispatcher.get_result(urls)):
+        time.sleep(0.4)
 
 
 def start():
@@ -111,11 +98,11 @@ def start():
                 continue
             try:
                 with CONSOLE.status("Waiting for results", spinner='line'):
-                    writeresults(dispatcher, count)  # Get results
+                    writeresults(dispatcher, urls)  # Get results
                 print(
-                    f'Results stored in [bold][c_iprt]./scrapped[/c_iprt][/bold] successfully.\n\n',
+                    f'Results returned successfully.\n\n',
                     style='c_good')
-            # If dispatcer is down
+            # If dispatcher is down
             except CommunicationError as e:
                 error(
                     'Dispatcher not reachable. Try again. (Previous urls saved)\n\n')

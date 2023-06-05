@@ -1,6 +1,7 @@
 import os
 import socket
 import time
+from math import log2
 from typing import Tuple
 
 import requests
@@ -10,9 +11,13 @@ from common.printing import *
 from common.setup import *
 from Pyro5.api import Proxy, register_dict_to_class
 from Pyro5.errors import CommunicationError, NamingError
+
 from roles.dispatcher import Dispatcher
 
 WORKERNAME = f"Worker_{os.getpid()}@{socket.gethostname()}"
+
+WAIT_INCREMENT = 1
+WAIT_REDUCTION = 1
 
 
 # Function that actually do the job, should be slow
@@ -39,6 +44,8 @@ def start(timeout=5):
     # Beauty printing. To details go to common.printing
     print('-- [c_beauty]XSCRAP[/c_beauty] WORKER --', justify='center')
     print(f'\nInitializing {WORKERNAME}.\n')
+
+    wait_time = 1
 
     dispatcher: Dispatcher
 
@@ -74,8 +81,10 @@ def start(timeout=5):
             # In this case the worker just works with one url
             job = dispatcher.get_work()[0]
         except ValueError:
-            pass
+            time.sleep(log2(wait_time)/WAIT_REDUCTION)
+            wait_time += WAIT_INCREMENT
         else:
+            wait_time = 1
             old_status = status.renderable.text
             status.renderable.text = "Working..."
             log(f"Job assigned. Fetching HTML: {job}.")
@@ -95,4 +104,3 @@ def start(timeout=5):
             dispatcher.put_result(job, text, code)
             log(f"Result saved.")
             status.renderable.text = old_status
-        time.sleep(2)

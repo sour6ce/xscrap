@@ -66,6 +66,8 @@ class Dispatcher(object):
         Sends a bunch of urls to pending to fetch. This forces them to be fetched no matter
         if there is already a result stored in cache.
         '''
+        if len(url) == 0:
+            return
         # Lock forces to allow only this method to change values in that key
         with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
             self.r_server.rpush(PENDING_KEY, *url)
@@ -128,17 +130,12 @@ class Dispatcher(object):
         log(f'Request for results on: \n[\n\t{sep.join(urls)}\n]')
         r = (self._retrieve_cache(urls))
 
-        log('\n\n:')
-
         pending_urls = [
             url for res, url in zip(r, urls)
             if res is None or res['status'] != 200]
 
-        log(f':{pending_urls}')
-
-        (self.put_work(pending_urls))
-
-        log(':\n\n')
+        if len(pending_urls) > 0:
+            (self.put_work(pending_urls))
 
         return r
 

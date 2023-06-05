@@ -1,5 +1,6 @@
 import os
 import socket
+import time
 from typing import Tuple
 
 import requests
@@ -34,7 +35,7 @@ def labor(url: str, timeout: int) -> Tuple[int, str]:
     return (sta, res)
 
 
-def start(timeout=3):
+def start(timeout=5):
     # Beauty printing. To details go to common.printing
     print('-- [c_beauty]XSCRAP[/c_beauty] WORKER --', justify='center')
     print(f'\nInitializing {WORKERNAME}.\n')
@@ -94,3 +95,4 @@ def start(timeout=3):
             dispatcher.put_result(job, text, code)
             log(f"Result saved.")
             status.renderable.text = old_status
+        time.sleep(2)

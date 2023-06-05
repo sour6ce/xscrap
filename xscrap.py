@@ -1,9 +1,9 @@
 from fire import Fire
 
 # Roles import
-import roles.direct.client as client
-import roles.direct.dispatcher as dispatcher
-import roles.direct.worker as worker
+import roles.client as client
+import roles.dispatcher as dispatcher
+import roles.worker as worker
 
 # Roles register
 ROLES = {

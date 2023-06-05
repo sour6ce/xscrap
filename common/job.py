@@ -3,14 +3,14 @@ import datetime
 
 class Job(object):
     itemId: str
-    data: str
+    url: str
     result: str | None | bool
     processedBy: str | None
 
-    def __init__(self, data, itemId=None):
+    def __init__(self, url, itemId=None):
         self.itemId = datetime.datetime.now().strftime(
             f'%y%m%d/%H%M%S') if itemId is None else itemId
-        self.data = data
+        self.url = url
         self.result = None
         self.processedBy = None
 
@@ -26,7 +26,7 @@ class Job(object):
     @staticmethod
     def from_dict(classname, d):
         """Method used to deserialize a job from Pyro"""
-        job = Job(d["data"], d["itemId"])
+        job = Job(d["url"], d["itemId"])
         job.result = d["result"]
         job.processedBy = d["processedBy"]
         return job

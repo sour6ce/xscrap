@@ -1,42 +1,24 @@
-from Pyro5.api import Proxy, register_dict_to_class
-from common.job import Job
 import os
 from os import path
-from roles.dispatcher import Dispatcher
+import time
 from typing import List
+
+from common.environment import *
+from common.job import Job
 from common.printing import *
+from common.setup import *
+from Pyro5.api import Proxy
 from Pyro5.errors import CommunicationError, NamingError
-from rich.markdown import Markdown
-from rich.text import Text
-
-
-# Registered how to cast from dict to class
-register_dict_to_class(
-    f'{Job.__module__}.{Job.__name__}', Job.from_dict)
+from roles.dispatcher import Dispatcher
 
 
 def placework(dispatcher: Dispatcher, urls: List[str]):
-    for url in urls:
-        dispatcher.put_work(Job(url))
+    dispatcher.put_work(urls)
 
 
-def writeresults(dispatcher: Dispatcher, count: int):
-    os.makedirs(path.join('.', 'scrapped'), exist_ok=True)
-    i = 0
-    while i < count:
-        try:
-            result = dispatcher.get_result()
-        except ValueError as e:
-            continue
-        try:
-            file_name = path.join('.', 'scrapped', f'result_{i:04d}.json')
-            with open(file_name, mode='wt') as file:
-                file.write(repr(result.__dict__).replace('\\\'', '&&&').replace(
-                    '"', '\\"').replace('\'', '"').replace('&&&', '\''))
-            i += 1
-        except Exception as e:
-            error(
-                f'Error writing results in file {file_name} for {result.data}. Shuting down client.\n')
+def writeresults(dispatcher: Dispatcher, urls: List[str]):
+    while any(True if r is None else False for r in dispatcher.get_result(urls)):
+        time.sleep(0.4)
 
 
 def start():
@@ -46,24 +28,25 @@ def start():
 
     # Checking if dispatcher is up
     with CONSOLE.status("Checking connection with dispatcher...", spinner='line') as status:
-        with Proxy('PYRONAME:xscrap.dispatcher') as disp:
-            try:
-                disp._pyroBind()
-                uri = disp._pyroUri
-                # Good
-                print(
-                    f'Successfully connected to dispatcher in {uri.host}:{uri.port}\n',
-                    style='c_good')
-            # If dispatcher is down
-            except CommunicationError as e:
-                status.stop()
-                error('Dispatcher not reachable. Shuting down client.\n\n')
-                exit(1)
-            # If name server is down
-            except NamingError as e:
-                status.stop()
-                error('Name Server not reachable. Shuting down client.\n\n')
-                exit(1)
+        dispatcher = Proxy(
+            f'PYRO:xscrap.dispatcher@{resolve_dispatcher()}:{resolve_dispatcher_port()}')
+        try:
+            dispatcher._pyroBind()
+            uri = dispatcher._pyroUri
+            # Good
+            print(
+                f'Successfully connected to dispatcher in {uri.host}:{uri.port}\n',
+                style='c_good')
+        # If dispatcher is down
+        except CommunicationError as e:
+            status.stop()
+            error('Dispatcher not reachable. Shuting down client.\n\n')
+            exit(1)
+        # If name server is down
+        except NamingError as e:
+            status.stop()
+            error('Name Server not reachable. Shuting down client.\n\n')
+            exit(1)
 
     urls = []  # List of urls to scrap
 
@@ -95,42 +78,41 @@ def start():
         # Start sending URLs to scrap
         if url == '':
             # Connect to dispatcher
-            with Proxy('PYRONAME:xscrap.dispatcher') as dispatcher:
-                count = len(urls)
-                try:
-                    print('\n')
-                    with CONSOLE.status("Sending URLs to scrap...", spinner='line'):
-                        placework(dispatcher, urls)  # Send the work
-                    print(f'URLs sended successfully.\n',
-                          style='c_good')
-                # If dispatcer is down
-                except CommunicationError as e:
-                    error(
-                        'Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
-                    continue
-                # If name server is down
-                except NamingError as e:
-                    status.stop()
-                    error(
-                        'Name Server not reachable. Try again. (Previous urls saved)\n\n')
-                    continue
-                try:
-                    with CONSOLE.status("Waiting for results", spinner='line'):
-                        writeresults(dispatcher, count)  # Get results
-                    print(
-                        f'Results stored in [bold][c_iprt]./scrapped[/c_iprt][/bold] successfully.\n\n',
-                        style='c_good')
-                # If dispatcer is down
-                except CommunicationError as e:
-                    error(
-                        'Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
-                    continue
-                # If name server is down
-                except NamingError as e:
-                    status.stop()
-                    error(
-                        'Name Server not reachable. Try again. (Previous urls saved)\n\n')
-                    continue
-                urls.clear()
+            count = len(urls)
+            try:
+                print('\n')
+                with CONSOLE.status("Sending URLs to scrap...", spinner='line'):
+                    placework(dispatcher, urls)  # Send the work
+                print(f'URLs sended successfully.\n',
+                      style='c_good')
+            # If dispatcer is down
+            except CommunicationError as e:
+                error(
+                    'Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
+                continue
+            # If name server is down
+            except NamingError as e:
+                status.stop()
+                error(
+                    'Name Server not reachable. Try again. (Previous urls saved)\n\n')
+                continue
+            try:
+                with CONSOLE.status("Waiting for results", spinner='line'):
+                    writeresults(dispatcher, urls)  # Get results
+                print(
+                    f'Results returned successfully.\n\n',
+                    style='c_good')
+            # If dispatcher is down
+            except CommunicationError as e:
+                error(
+                    'Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
+                continue
+            # If name server is down
+            except NamingError as e:
+                status.stop()
+                error(
+                    'Name Server not reachable. Try again. (Previous urls saved)\n\n')
+                continue
+            urls.clear()
         else:
             urls.append(url)

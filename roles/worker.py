@@ -1,89 +1,98 @@
 import os
-from common.job import Job
-from Pyro5.api import Proxy, register_dict_to_class
 import socket
+import time
+from typing import Tuple
+
 import requests
-from roles.dispatcher import Dispatcher
+from common.environment import *
+from common.job import Job
 from common.printing import *
-from Pyro5.errors import NamingError, CommunicationError
-
-# Registered how to cast from dict to class
-register_dict_to_class(
-    f'{Job.__module__}.{Job.__name__}', Job.from_dict)
-
+from common.setup import *
+from Pyro5.api import Proxy, register_dict_to_class
+from Pyro5.errors import CommunicationError, NamingError
+from roles.dispatcher import Dispatcher
 
 WORKERNAME = f"Worker_{os.getpid()}@{socket.gethostname()}"
 
 
-def labor(data, timeout: int) -> str | int:  # Function that actually do the job, should be slow
-    # The result is the body of the page or a number if the request end in an error
-    res = None
+# Function that actually do the job, should be slow
+def labor(url: str, timeout: int) -> Tuple[int, str]:
+    # The result is a tuple of status code and body
+    # NOTE: setup.EARLY_ERROR_STATUS_CODE has an special status code used
+    # and is reserved to request that didn't reach the site
+    res: str = None
+    sta: int = None
 
     # The data for this job is the url of the page to scrap
     try:
-        res = requests.get(data, timeout=timeout)
-        res = res.text if (res.status_code // 100) == 2 else res.status_code
+        _res = requests.get(url, timeout=timeout)
+        sta = _res.status_code
+        res = _res.text
     except Exception as e:
-        res = 0
+        sta = 580
+        res = str(e)
 
-    return res
-
-
-# Function that process the job calling the labor and storing the result
-def process(job: Job, timeout):
-    job.result = labor(job.data, timeout)
-    job.processedBy = WORKERNAME
+    return (sta, res)
 
 
-def start(timeout=10):
+def start(timeout=5):
     # Beauty printing. To details go to common.printing
     print('-- [c_beauty]XSCRAP[/c_beauty] WORKER --', justify='center')
     print(f'\nInitializing {WORKERNAME}.\n')
 
+    dispatcher: Dispatcher
+
     # Checking if dispatcher is up
     with CONSOLE.status("Checking connection with dispatcher...", spinner='line') as status:
-        with Proxy('PYRONAME:xscrap.dispatcher') as disp:
-            try:
-                disp._pyroBind()
-                uri = disp._pyroUri
-                # Good
-                print(
-                    f'Successfully connected to dispatcher in {uri.host}:{uri.port}\n',
-                    style='c_good')
-            # If dispatcher is down
-            except CommunicationError as e:
-                status.stop()
-                error('Dispatcher not reachable. Shuting down worker.\n')
-                exit(1)
-            # If name server is down
-            except NamingError as e:
-                status.stop()
-                error('Name Server not reachable. Shuting down worker.\n')
-                exit(1)
-
-    dispatcher: Dispatcher = Proxy("PYRONAME:xscrap.dispatcher")
+        log(
+            f"Searching for dispatcher at {resolve_dispatcher()}:{resolve_dispatcher_port()}")
+        dispatcher = Proxy(
+            f'PYRO:xscrap.dispatcher@{resolve_dispatcher()}:{resolve_dispatcher_port()}')
+        try:
+            dispatcher._pyroBind()
+            uri = dispatcher._pyroUri
+            # Good
+            print(
+                f'Successfully connected to dispatcher in {uri.host}:{uri.port}\n',
+                style='c_good')
+        # If dispatcher is down
+        except CommunicationError as e:
+            status.stop()
+            error('Dispatcher not reachable. Shuting down worker.\n')
+            exit(1)
+        # If name server is down
+        except NamingError as e:
+            status.stop()
+            error('Name Server not reachable. Shuting down worker.\n')
+            exit(1)
 
     status = CONSOLE.status("Waiting for job...", spinner='line')
     status.start()
 
     while True:
         try:
-            job = dispatcher.get_work()
+            # In this case the worker just works with one url
+            job = dispatcher.get_work()[0]
         except ValueError:
             pass
         else:
             old_status = status.renderable.text
             status.renderable.text = "Working..."
-            log(f"Job assigned. Fetching HTML: {job.data}.")
-            process(job, timeout=timeout)
-            log(f"Fetch {job.data} gives {job.result if isinstance(job.result,int) else 'an HTML.'}")
-            if isinstance(job.result, str):
-                print(f'HTML successfully fetched: {job.data}.', style='c_good')
-            if isinstance(job.result, int):
+            log(f"Job assigned. Fetching HTML: {job}.")
+            code, text = labor(job, timeout=timeout)
+            log(f"Fetch {job} gives [c_beauty]{code}[/c_beauty] code")
+            if code == 200:
+                print(f'URL successfully fetched.\n', style='c_good')
+            elif code//100 == 2:
+                print(f'URL result in {code} status code.\n', style='c_good')
+            elif code == EARLY_ERROR_STATUS_CODE:
+                print(f'Was not possible to access the URL.\n', style='c_fail')
+            else:
                 print(
-                    f'HTML fetching failed: {job.data}. Error:{job.result}',
+                    f'URL fetching failed with status code {code}.\n',
                     style='c_fail')
             log(f"Saving result.")
-            dispatcher.put_result(job)
+            dispatcher.put_result(job, text, code)
             log(f"Result saved.")
             status.renderable.text = old_status
+        time.sleep(2)

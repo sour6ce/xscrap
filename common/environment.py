@@ -24,6 +24,14 @@ def resolve_dispatcher_port():
     return int(os.environ.get('DISPATCHER_PORT', 2346))
 
 
+def resolve_api_host():
+    return os.environ.get('API_HOST', os.environ.get('HOSTNAME', '127.0.0.1'))
+
+
+def resolve_api_port():
+    return int(os.environ.get('API_PORT', os.environ.get('HOSTPORT', 8000)))
+
+
 def resolve_redis():
     return os.environ.get(
         'REDIS_URL',

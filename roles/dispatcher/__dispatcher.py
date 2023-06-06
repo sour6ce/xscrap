@@ -97,8 +97,8 @@ class Dispatcher(object):
         log(f'Arrived batch job: \n[\n\t{sep.join(urls)}\n]')
 
         # Sadly independent but not parallel
-        self._send_pending(*urls)
         self._clear_cache(urls)
+        self._send_pending(*urls)
 
     def get_work(self, count: int = 1) -> List[str]:
         log(f'Request for a job.')
@@ -123,7 +123,7 @@ class Dispatcher(object):
         log(f'Arrived result for job: {url} with status {status_code}')
         self.r_server.set(
             build_cache_key(url),
-            repr({'body': body, 'status': 200}))
+            repr({'body': body, 'status': status_code}))
 
     def get_result(self, urls: List[str]) -> List[dict | None]:
         sep = "\n\t"
@@ -138,6 +138,9 @@ class Dispatcher(object):
             (self.put_work(pending_urls))
 
         return r
+
+    def get_result_single(self, url: str) -> dict | None:
+        return self.get_result([url])[0]
 
     def pending_size(self):
         return self.r_server.llen(PENDING_KEY)

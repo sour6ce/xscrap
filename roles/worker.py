@@ -54,8 +54,11 @@ def start(timeout=5):
             job = dispatcher.get_work()[0]
         except Exception as e:
             if isinstance(e, ValueError):
-                time.sleep(log2(wait_time)/WAIT_REDUCTION)
-                wait_time += WAIT_INCREMENT
+                try:
+                    time.sleep(log2(wait_time)/WAIT_REDUCTION)
+                    wait_time += WAIT_INCREMENT
+                except KeyboardInterrupt:
+                    exit(0)
             else:
                 status.stop()
                 dispatcher = get_dispatcher()

@@ -40,7 +40,10 @@ def start():
     # Main loop reading all the urls
     while True:
         print('[c_beauty]<>[/c_beauty]')
-        url = input()
+        try:
+            url = input()
+        except KeyboardInterrupt:
+            exit()
 
         # Command exit. Exit the client
         if url == 'exit':

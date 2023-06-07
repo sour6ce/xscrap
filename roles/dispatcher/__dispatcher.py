@@ -176,6 +176,9 @@ def get_dispatcher(connection_attempts: int = 0):
             print(
                 f'Successfully connected to dispatcher in {uri.host}:{uri.port}\n',
                 style='c_good')
+        # Ctrl-C signal and alike
+        except KeyboardInterrupt:
+            exit(0)
         except Exception as e:
             # If dispatcher is down
             if isinstance(e, CommunicationError):

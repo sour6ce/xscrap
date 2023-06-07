@@ -61,7 +61,7 @@ def start():
             count = len(urls)
             if not check_is_there():
                 dispatcher = get_dispatcher(CLIENT_CONNECTION_RETRIES)
-            log(f'{dispatcher}')
+
             if dispatcher is None:
                 error('Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
                 continue

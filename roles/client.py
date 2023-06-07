@@ -9,8 +9,7 @@ from common.printing import *
 from common.setup import *
 from Pyro5.api import Proxy
 from Pyro5.errors import CommunicationError, NamingError
-from roles.dispatcher import Dispatcher
-
+from roles.dispatcher import Dispatcher, get_dispatcher, check_is_there
 
 def placework(dispatcher: Dispatcher, urls: List[str]):
     dispatcher.put_work(urls)
@@ -26,28 +25,7 @@ def start():
     print('-- [c_beauty]XSCRAP[/c_beauty] CLIENT --', justify='center')
     print('\nInitializing client.\n')
 
-    # Checking if dispatcher is up
-    with CONSOLE.status("Checking connection with dispatcher...", spinner='line') as status:
-        dispatcher = Proxy(
-            f'PYRO:xscrap.dispatcher@{resolve_dispatcher()}:{resolve_dispatcher_port()}')
-        try:
-            dispatcher._pyroBind()
-            uri = dispatcher._pyroUri
-            # Good
-            print(
-                f'Successfully connected to dispatcher in {uri.host}:{uri.port}\n',
-                style='c_good')
-        # If dispatcher is down
-        except CommunicationError as e:
-            status.stop()
-            error('Dispatcher not reachable. Shuting down client.\n\n')
-            exit(1)
-        # If name server is down
-        except NamingError as e:
-            status.stop()
-            error('Name Server not reachable. Shuting down client.\n\n')
-            exit(1)
-
+    dispatcher = get_dispatcher()
     urls = []  # List of urls to scrap
 
     print(
@@ -79,40 +57,41 @@ def start():
         if url == '':
             # Connect to dispatcher
             count = len(urls)
-            try:
-                print('\n')
-                with CONSOLE.status("Sending URLs to scrap...", spinner='line'):
+            if not check_is_there():
+                dispatcher = get_dispatcher(15)
+            log(f'{dispatcher}')
+            if dispatcher is None:
+                error('Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
+                continue
+
+            print('\n')
+            with CONSOLE.status("Sending URLs to scrap...", spinner='line') as status:
+                try: 
                     placework(dispatcher, urls)  # Send the work
-                print(f'URLs sended successfully.\n',
-                      style='c_good')
-            # If dispatcer is down
-            except CommunicationError as e:
-                error(
-                    'Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
-                continue
-            # If name server is down
-            except NamingError as e:
-                status.stop()
-                error(
-                    'Name Server not reachable. Try again. (Previous urls saved)\n\n')
-                continue
-            try:
-                with CONSOLE.status("Waiting for results", spinner='line'):
-                    writeresults(dispatcher, urls)  # Get results
-                print(
-                    f'Results returned successfully.\n\n',
+                except CommunicationError or NamingError:
+                    dispatcher = get_dispatcher(15)
+                    if dispatcher is None:
+                        error('Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
+                        continue
+                except Exception as e:
+                    raise e
+            print(f'URLs sent successfully.\n',
                     style='c_good')
-            # If dispatcher is down
-            except CommunicationError as e:
-                error(
-                    'Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
-                continue
-            # If name server is down
-            except NamingError as e:
-                status.stop()
-                error(
-                    'Name Server not reachable. Try again. (Previous urls saved)\n\n')
-                continue
+            
+            with CONSOLE.status("Waiting for results", spinner='line'):
+                try:
+                    writeresults(dispatcher, urls)  # Get results
+                except CommunicationError or NamingError:
+                    dispatcher = get_dispatcher()
+                    if dispatcher is None:
+                        error('Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
+                        continue
+                except Exception as e:
+                    raise e
+            print(
+                f'Results returned successfully.\n\n',
+                style='c_good')
+            
             urls.clear()
         else:
             urls.append(url)

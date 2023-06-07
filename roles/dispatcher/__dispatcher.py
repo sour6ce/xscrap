@@ -7,7 +7,8 @@ import redis
 from common.environment import *
 from common.job import Job
 from common.printing import *
-from Pyro5.api import behavior, expose, current_context
+from Pyro5.api import behavior, expose, current_context, Proxy
+from Pyro5.errors import CommunicationError, NamingError
 from typing_extensions import overload
 
 ###############################################################################
@@ -30,7 +31,6 @@ CACHE_KEY_PREFIX = 'cache'
 
 def build_cache_key(url, prefix=CACHE_KEY_PREFIX):
     return f'{prefix}:{url}'
-
 
 @expose
 @behavior(instance_mode="single")
@@ -147,3 +147,45 @@ class Dispatcher(object):
 
     def cache_size(self):
         return self.r_server.dbsize()-1
+
+def check_is_there():
+    try:
+        dispatcher = Proxy(
+            f'PYRO:xscrap.dispatcher@{resolve_dispatcher()}:{resolve_dispatcher_port()}')
+        dispatcher._pyroBind()
+        return True
+    except:
+        return False
+
+def get_dispatcher(connection_attempts: int = 0):
+    dispatcher: Dispatcher
+    # Checking if dispatcher is up
+    status = CONSOLE.status("Checking connection with dispatcher...", spinner='line')
+    retries_count = 0
+    # Note that when connection_attempts is set to 0, it tries to connect indefinitely
+    while connection_attempts == 0 or retries_count < connection_attempts:
+        try:
+            log(
+                f"Searching for dispatcher at {resolve_dispatcher()}:{resolve_dispatcher_port()}")
+            dispatcher = Proxy(
+                f'PYRO:xscrap.dispatcher@{resolve_dispatcher()}:{resolve_dispatcher_port()}')
+            retries_count+=1
+            dispatcher._pyroBind()
+            uri = dispatcher._pyroUri
+            # Good
+            print(
+                f'Successfully connected to dispatcher in {uri.host}:{uri.port}\n',
+                style='c_good')
+        except Exception as e:
+            # If dispatcher is down
+            if isinstance(e, CommunicationError):
+                error('Dispatcher not reachable.\n')
+            # If name server is down
+            elif isinstance(e, NameError):
+                error('Name Server not reachable.\n')
+            else:
+                raise e
+        else:
+            return dispatcher
+    error(f'Did not manage to connect to dispatcheer after {connection_attempts} tries.\n')
+    return None

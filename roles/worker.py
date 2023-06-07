@@ -6,13 +6,10 @@ from typing import Tuple
 
 import requests
 from common.environment import *
-from common.job import Job
 from common.printing import *
 from common.setup import *
-from Pyro5.api import Proxy, register_dict_to_class
-from Pyro5.errors import CommunicationError, NamingError
 
-from roles.dispatcher import Dispatcher
+from roles.dispatcher import Dispatcher, get_dispatcher, check_is_there
 
 WORKERNAME = f"Worker_{os.getpid()}@{socket.gethostname()}"
 
@@ -39,7 +36,6 @@ def labor(url: str, timeout: int) -> Tuple[int, str]:
 
     return (sta, res)
 
-
 def start(timeout=5):
     # Beauty printing. To details go to common.printing
     print('-- [c_beauty]XSCRAP[/c_beauty] WORKER --', justify='center')
@@ -47,31 +43,7 @@ def start(timeout=5):
 
     wait_time = 1
 
-    dispatcher: Dispatcher
-
-    # Checking if dispatcher is up
-    with CONSOLE.status("Checking connection with dispatcher...", spinner='line') as status:
-        log(
-            f"Searching for dispatcher at {resolve_dispatcher()}:{resolve_dispatcher_port()}")
-        dispatcher = Proxy(
-            f'PYRO:xscrap.dispatcher@{resolve_dispatcher()}:{resolve_dispatcher_port()}')
-        try:
-            dispatcher._pyroBind()
-            uri = dispatcher._pyroUri
-            # Good
-            print(
-                f'Successfully connected to dispatcher in {uri.host}:{uri.port}\n',
-                style='c_good')
-        # If dispatcher is down
-        except CommunicationError as e:
-            status.stop()
-            error('Dispatcher not reachable. Shuting down worker.\n')
-            exit(1)
-        # If name server is down
-        except NamingError as e:
-            status.stop()
-            error('Name Server not reachable. Shuting down worker.\n')
-            exit(1)
+    dispatcher = get_dispatcher()
 
     status = CONSOLE.status("Waiting for job...", spinner='line')
     status.start()
@@ -80,9 +52,15 @@ def start(timeout=5):
         try:
             # In this case the worker just works with one url
             job = dispatcher.get_work()[0]
-        except ValueError:
-            time.sleep(log2(wait_time)/WAIT_REDUCTION)
-            wait_time += WAIT_INCREMENT
+        except Exception as e:
+            if isinstance(e, ValueError):
+                time.sleep(log2(wait_time)/WAIT_REDUCTION)
+                wait_time += WAIT_INCREMENT
+            else:
+                status.stop()
+                dispatcher = get_dispatcher()
+                status.start()
+                wait_time = 1
         else:
             wait_time = 1
             old_status = status.renderable.text
@@ -101,6 +79,12 @@ def start(timeout=5):
                     f'URL fetching failed with status code {code}.\n',
                     style='c_fail')
             log(f"Saving result.")
+
+            if not check_is_there():
+                status.stop()
+                dispatcher = get_dispatcher()
+                status.start()
+
             dispatcher.put_result(job, text, code)
             log(f"Result saved.")
             status.renderable.text = old_status

@@ -11,6 +11,8 @@ from Pyro5.api import Proxy
 from Pyro5.errors import CommunicationError, NamingError
 from roles.dispatcher import Dispatcher, get_dispatcher, check_is_there
 
+CLIENT_CONNECTION_RETRIES=15
+
 def placework(dispatcher: Dispatcher, urls: List[str]):
     dispatcher.put_work(urls)
 
@@ -58,7 +60,7 @@ def start():
             # Connect to dispatcher
             count = len(urls)
             if not check_is_there():
-                dispatcher = get_dispatcher(15)
+                dispatcher = get_dispatcher(CLIENT_CONNECTION_RETRIES)
             log(f'{dispatcher}')
             if dispatcher is None:
                 error('Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
@@ -69,7 +71,7 @@ def start():
                 try: 
                     placework(dispatcher, urls)  # Send the work
                 except CommunicationError or NamingError:
-                    dispatcher = get_dispatcher(15)
+                    dispatcher = get_dispatcher(CLIENT_CONNECTION_RETRIES)
                     if dispatcher is None:
                         error('Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
                         continue

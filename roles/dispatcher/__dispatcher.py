@@ -148,6 +148,9 @@ class Dispatcher(object):
     def cache_size(self):
         return self.r_server.dbsize()-1
 
+    def get_backup(self):
+        return (resolve_backup_dispatcher(), resolve_backup_dispatcher_port())
+
 def check_is_there():
     try:
         dispatcher = Proxy(
@@ -157,10 +160,18 @@ def check_is_there():
     except:
         return False
 
-def get_dispatcher(connection_attempts: int = 0):
+
+__stored_backup = (None, None)
+
+
+def get_dispatcher():
+    connection_attempts = resolve_mbb_retries()
+    connection_sleep = resolve_mbb_time()
+
+    global __stored_backup
+
     dispatcher: Dispatcher
     # Checking if dispatcher is up
-    status = CONSOLE.status("Checking connection with dispatcher...", spinner='line')
     retries_count = 0
     # Note that when connection_attempts is set to 0, it tries to connect indefinitely
     while connection_attempts == 0 or retries_count < connection_attempts:
@@ -183,12 +194,45 @@ def get_dispatcher(connection_attempts: int = 0):
             # If dispatcher is down
             if isinstance(e, CommunicationError):
                 error('Dispatcher not reachable.\n')
+                time.sleep(connection_sleep)
             # If name server is down
             elif isinstance(e, NameError):
                 error('Name Server not reachable.\n')
             else:
                 raise e
         else:
+            __stored_backup = dispatcher.get_backup()
             return dispatcher
-    error(f'Did not manage to connect to dispatcheer after {connection_attempts} tries.\n')
+    if not any(__stored_backup):
+        __stored_backup = (
+            resolve_backup_dispatcher(),
+            resolve_backup_dispatcher_port()
+        )
+    if not any(__stored_backup):
+        error(
+            f'Did not manage to connect to dispatcher after {connection_attempts} tries. Exiting the application.\n')
+        exit(1)
+    else:
+        error(
+            f'Did not manage to connect to dispatcher after {connection_attempts} tries. Trying to connect to backup dispatcher.\n')
+        try:
+            log(
+                f"Searching for backup dispatcher at {__stored_backup[0]}:{__stored_backup[1]}")
+            dispatcher = Proxy(
+                f'PYRO:xscrap.dispatcher@{__stored_backup[0]}:{__stored_backup[1]}')
+            retries_count += 1
+            dispatcher._pyroBind()
+            uri = dispatcher._pyroUri
+            # Good
+            print(
+                f'Successfully connected to backup dispatcher in {uri.host}:{uri.port}\n',
+                style='c_good')
+        # Ctrl-C signal and alike
+        except KeyboardInterrupt:
+            exit(0)
+        except CommunicationError as e:
+            error('Backup dispatcher not reachable.\n')
+        else:
+            __stored_backup = dispatcher.get_backup()
+            return dispatcher
     return None

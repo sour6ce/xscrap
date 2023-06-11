@@ -9,6 +9,7 @@ from common.environment import *
 from common.printing import *
 from common.setup import *
 
+from Pyro5.errors import CommunicationError
 from roles.dispatcher import Dispatcher, get_dispatcher, check_is_there
 
 WORKERNAME = f"Worker_{os.getpid()}@{socket.gethostname()}"
@@ -36,6 +37,7 @@ def labor(url: str, timeout: int) -> Tuple[int, str]:
 
     return (sta, res)
 
+
 def start(timeout=5):
     # Beauty printing. To details go to common.printing
     print('-- [c_beauty]XSCRAP[/c_beauty] WORKER --', justify='center')
@@ -52,18 +54,14 @@ def start(timeout=5):
         try:
             # In this case the worker just works with one url
             job = dispatcher.get_work()[0]
-        except Exception as e:
-            if isinstance(e, ValueError):
-                try:
-                    time.sleep(log2(wait_time)/WAIT_REDUCTION)
-                    wait_time += WAIT_INCREMENT
-                except KeyboardInterrupt:
-                    exit(0)
-            else:
-                status.stop()
-                dispatcher = get_dispatcher()
-                status.start()
-                wait_time = 1
+        except ValueError as e:
+            time.sleep(log2(wait_time)/WAIT_REDUCTION)
+            wait_time += WAIT_INCREMENT
+        except CommunicationError:
+            status.stop()
+            dispatcher = get_dispatcher()
+            status.start()
+            wait_time = 1
         else:
             wait_time = 1
             old_status = status.renderable.text
@@ -74,9 +72,12 @@ def start(timeout=5):
             if code == 200:
                 print(f'URL successfully fetched.\n', style='c_good')
             elif code//100 == 2:
-                print(f'URL result in {code} status code.\n', style='c_good')
+                print(
+                    f'URL result in {code} status code.\n', style='c_good')
             elif code == EARLY_ERROR_STATUS_CODE:
-                print(f'Was not possible to access the URL.\n', style='c_fail')
+                print(
+                    f'Was not possible to access the URL.\n',
+                    style='c_fail')
             else:
                 print(
                     f'URL fetching failed with status code {code}.\n',

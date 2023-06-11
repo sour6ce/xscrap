@@ -27,7 +27,7 @@ from typing_extensions import overload
 ###############################################################################
 PENDING_KEY = 'pending'
 CACHE_KEY_PREFIX = 'cache'
-
+PENDING_SET_KEY = 'pending_set'
 
 def build_cache_key(url, prefix=CACHE_KEY_PREFIX):
     return f'{prefix}:{url}'
@@ -61,7 +61,7 @@ class Dispatcher(object):
             # TODO: Change the behavior in case of an error in redis connection
             exit(1)
 
-    def _send_pending(self, *url: str):
+    def _send_pending(self, url: List[str]):
         '''
         Sends a bunch of urls to pending to fetch. This forces them to be fetched no matter
         if there is already a result stored in cache.
@@ -69,8 +69,13 @@ class Dispatcher(object):
         if len(url) == 0:
             return
         # Lock forces to allow only this method to change values in that key
-        with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
-            self.r_server.rpush(PENDING_KEY, *url)
+        for urlx in url:
+            with self.r_server.lock(PENDING_SET_KEY+"_lock_", thread_local=False):
+                if self.r_server.sismember(PENDING_SET_KEY, urlx):
+                    return
+                self.r_server.sadd(PENDING_SET_KEY, urlx)
+            with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
+                self.r_server.rpush(PENDING_KEY, urlx)
 
     def _clear_cache_single(self, url: str):
         '''Delete the cache result for a given url.'''
@@ -98,7 +103,7 @@ class Dispatcher(object):
 
         # Sadly independent but not parallel
         self._clear_cache(urls)
-        self._send_pending(*urls)
+        self._send_pending(urls)
 
     def get_work(self, count: int = 1) -> List[str]:
         log(f'Request for a job.')
@@ -114,6 +119,14 @@ class Dispatcher(object):
 
         with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
             url = self.r_server.lpop(PENDING_KEY)
+
+        if isinstance(url, str):
+            with self.r_server.lock(PENDING_SET_KEY+"_lock_", thread_local=False):
+                self.r_server.srem(PENDING_SET_KEY, url)
+        else:
+            for urlx in url:
+                with self.r_server.lock(PENDING_SET_KEY+"_lock_", thread_local=False):
+                    self.r_server.srem(PENDING_SET_KEY, urlx)
 
         log(f'Job given: {url}.')
 

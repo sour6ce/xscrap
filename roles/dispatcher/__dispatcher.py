@@ -27,7 +27,7 @@ from typing_extensions import overload
 ###############################################################################
 PENDING_KEY = 'pending'
 CACHE_KEY_PREFIX = 'cache'
-
+PENDING_SET_KEY = 'pending_set'
 
 def build_cache_key(url, prefix=CACHE_KEY_PREFIX):
     return f'{prefix}:{url}'
@@ -61,7 +61,7 @@ class Dispatcher(object):
             # TODO: Change the behavior in case of an error in redis connection
             exit(1)
 
-    def _send_pending(self, *url: str):
+    def _send_pending(self, url: List[str]):
         '''
         Sends a bunch of urls to pending to fetch. This forces them to be fetched no matter
         if there is already a result stored in cache.
@@ -69,15 +69,34 @@ class Dispatcher(object):
         if len(url) == 0:
             return
         # Lock forces to allow only this method to change values in that key
-        with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
-            self.r_server.rpush(PENDING_KEY, *url)
+        for urlx in url:
+            while True:
+                try:
+                    with self.r_server.lock(PENDING_SET_KEY+"_lock_", thread_local=False):
+                        if self.r_server.sismember(PENDING_SET_KEY, urlx):
+                            return
+                        self.r_server.sadd(PENDING_SET_KEY, urlx)
+                    break
+                except redis.exceptions.ConnectionError:
+                    error('Redis server unavaliable\n')
+            while True:
+                try:
+                    with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
+                        self.r_server.rpush(PENDING_KEY, urlx)
+                    break
+                except redis.exceptions.ConnectionError:
+                    error('Redis server unavaliable\n')
 
     def _clear_cache_single(self, url: str):
         '''Delete the cache result for a given url.'''
         url_key = build_cache_key(url)
-
-        with self.r_server.lock(url_key+"_lock_", thread_local=False):
-            self.r_server.delete(url_key)
+        while True:
+            try:
+                with self.r_server.lock(url_key+"_lock_", thread_local=False):
+                    self.r_server.delete(url_key)
+                break
+            except redis.exceptions.ConnectionError:
+                error('Redis server unavaliable\n')
 
     def _clear_cache(self, urls: List[str]):
         '''Delete the cache result for a list of urls.'''
@@ -85,7 +104,12 @@ class Dispatcher(object):
 
     def _retrieve_cache_single(self, url: str) -> dict | None:
         '''Retrieve result stored for a given url. If there's no cache for that url return None.'''
-        result = self.r_server.get(build_cache_key(url))
+        while True:
+            try:
+                result = self.r_server.get(build_cache_key(url))
+                break
+            except redis.exceptions.ConnectionError:
+                error('Redis server unavaliable\n')
         return result if result is None else eval(result)
 
     def _retrieve_cache(self, urls: List[str]) -> List[dict | None]:
@@ -98,22 +122,49 @@ class Dispatcher(object):
 
         # Sadly independent but not parallel
         self._clear_cache(urls)
-        self._send_pending(*urls)
+        self._send_pending(urls)
 
     def get_work(self, count: int = 1) -> List[str]:
         log(f'Request for a job.')
 
-        if self.r_server.llen(PENDING_KEY) == 0:
-            log(f"No jobs available for a request.")
-            raise ValueError("No jobs in queue")
-        if self.r_server.llen(PENDING_KEY) < count:
+        while True:
+            try:
+                len = self.r_server.llen(PENDING_KEY)
+                break
+            except redis.exceptions.ConnectionError:
+                error('Redis server unavaliable\n')
+
+        if len < count:
             log(f"Not enough jobs available for a request.")
             raise ValueError("Not enough jobs in queue")
 
         url: str = ''
 
-        with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
-            url = self.r_server.lpop(PENDING_KEY)
+        while True:
+            try:
+                with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
+                    url = self.r_server.lpop(PENDING_KEY)
+                break
+            except redis.exceptions.ConnectionError:
+                error('Redis server unavaliable\n')
+
+        if isinstance(url, str):
+            while True:
+                try:
+                    with self.r_server.lock(PENDING_SET_KEY+"_lock_", thread_local=False):
+                        self.r_server.srem(PENDING_SET_KEY, url)
+                    break
+                except redis.exceptions.ConnectionError:
+                    error('Redis server unavaliable\n')
+        else:
+            for urlx in url:
+                while True:
+                    try:
+                        with self.r_server.lock(PENDING_SET_KEY+"_lock_", thread_local=False):
+                            self.r_server.srem(PENDING_SET_KEY, urlx)
+                        break
+                    except redis.exceptions.ConnectionError:
+                        error('Redis server unavaliable\n')
 
         log(f'Job given: {url}.')
 
@@ -121,9 +172,14 @@ class Dispatcher(object):
 
     def put_result(self, url: str, body: str, status_code: int = 200):
         log(f'Arrived result for job: {url} with status {status_code}')
-        self.r_server.set(
-            build_cache_key(url),
-            repr({'body': body, 'status': status_code}))
+        while True:
+            try:
+                self.r_server.set(
+                    build_cache_key(url),
+                    repr({'body': body, 'status': status_code}))
+                break
+            except redis.exceptions.ConnectionError:
+                error('Redis server unavaliable\n')
 
     def get_result(self, urls: List[str]) -> List[dict | None]:
         sep = "\n\t"
@@ -143,10 +199,18 @@ class Dispatcher(object):
         return self.get_result([url])[0]
 
     def pending_size(self):
-        return self.r_server.llen(PENDING_KEY)
+        while True:
+            try:
+                return self.r_server.llen(PENDING_KEY)
+            except redis.exceptions.ConnectionError:
+                error('Redis server unavaliable\n')
 
     def cache_size(self):
-        return self.r_server.dbsize()-1
+        while True:
+            try:
+                return self.r_server.dbsize() - 1
+            except redis.exceptions.ConnectionError:
+                error('Redis server unavaliable\n')
 
     def get_backup(self):
         return (resolve_backup_dispatcher(), resolve_backup_dispatcher_port())

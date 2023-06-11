@@ -34,6 +34,8 @@ def labor(url: str, timeout: int) -> Tuple[int, str]:
     except Exception as e:
         sta = 580
         res = str(e)
+    except KeyboardInterrupt:
+        exit(0)
 
     return (sta, res)
 

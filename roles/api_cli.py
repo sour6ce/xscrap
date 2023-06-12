@@ -7,8 +7,9 @@ class start():
     CLI tool to use the API from the XSCRAP system.
 
     Commands:
-       fetch
-       reset
+       /fetch
+
+       /reset
     '''
     def fetch(self,api:str,*urls:str):
         '''

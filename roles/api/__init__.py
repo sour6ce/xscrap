@@ -10,7 +10,8 @@ from common.environment import (resolve_api_port, resolve_dispatcher,
 from fastapi import FastAPI, Request
 from pydantic import AnyUrl, BaseModel
 from Pyro5.api import Proxy
-from roles.dispatcher import Dispatcher
+from Pyro5.errors import CommunicationError
+from roles.dispatcher import Dispatcher, get_dispatcher
 from sse_starlette.sse import EventSourceResponse
 
 app = FastAPI()
@@ -24,15 +25,18 @@ def fetch_result(url: str):
     Tries to get the result for scrapping the URL and keeps trying until it has it
     '''
     wait_time = 1
-    with Proxy(f'PYRO:xscrap.dispatcher@{resolve_dispatcher()}:{resolve_dispatcher_port()}') as dispatcher:
-        dispatcher: Dispatcher
-        while True:
+    dispatcher = get_dispatcher()
+    while True:
+        try:
             r = dispatcher.get_result_single(url)
-            if r is not None:
-                wait_time = 1
-                return r
-            time.sleep(log2(wait_time)//WAIT_REDUCTION)
-            wait_time += WAIT_INCREMENT
+        except CommunicationError:
+            dispatcher = get_dispatcher()
+            r = dispatcher.get_result_single(url)
+        if r is not None:
+            wait_time = 1
+            return r
+        time.sleep(log2(wait_time)//WAIT_REDUCTION)
+        wait_time += WAIT_INCREMENT
 
 
 def request_result(urls: List[str]):
@@ -42,8 +46,11 @@ def request_result(urls: List[str]):
     # TODO: Improve this behavior.
     # The goal of this is to enqueue all needed url before you try with fetch_result
     # to have the result
-    with Proxy(f'PYRO:xscrap.dispatcher@{resolve_dispatcher()}:{resolve_dispatcher_port()}') as dispatcher:
-        dispatcher: Dispatcher
+    dispatcher = get_dispatcher()
+    try:
+        dispatcher.get_result(urls)
+    except CommunicationError:
+        dispatcher = get_dispatcher()
         dispatcher.get_result(urls)
 
 
@@ -67,6 +74,17 @@ async def scrap(request: Request, batch: Batch):
             yield str(result)
 
     return EventSourceResponse(event_stream())
+
+
+@app.post("/reset")
+async def scrap(request: Request, batch: Batch):
+    dispatcher = get_dispatcher()
+    try:
+        dispatcher.clear_cache(batch.urls)
+    except CommunicationError:
+        dispatcher = get_dispatcher()
+        dispatcher.clear_cache(batch.urls)
+    
 
 
 def start():

@@ -76,5 +76,16 @@ async def scrap(request: Request, batch: Batch):
     return EventSourceResponse(event_stream())
 
 
+@app.post("/reset")
+async def scrap(request: Request, batch: Batch):
+    dispatcher = get_dispatcher()
+    try:
+        dispatcher.clear_cache(batch.urls)
+    except CommunicationError:
+        dispatcher = get_dispatcher()
+        dispatcher.clear_cache(batch.urls)
+    
+
+
 def start():
     uvicorn.run(app, host=resolve_host(), port=resolve_api_port())

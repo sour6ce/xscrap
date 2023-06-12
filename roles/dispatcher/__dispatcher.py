@@ -127,7 +127,7 @@ class Dispatcher(object):
             error('Redis server unavaliable.\n')
             self.check_redis()
 
-    def _clear_cache(self, urls: List[str]):
+    def clear_cache(self, urls: List[str]):
         '''Delete the cache result for a list of urls.'''
         _ = [self._clear_cache_single(url) for url in urls]
 

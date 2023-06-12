@@ -151,7 +151,7 @@ class Dispatcher(object):
         log(f'Arrived batch job: \n[\n\t{sep.join(urls)}\n]')
 
         # Sadly independent but not parallel
-        self._clear_cache(urls)
+        self.clear_cache(urls)
         self._send_pending(urls)
 
     def get_work(self, count: int = 1) -> List[str]:

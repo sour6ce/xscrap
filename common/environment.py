@@ -52,11 +52,17 @@ def resolve_api_port():
 def resolve_redis():
     return os.environ.get(
         'REDIS_URL',
-        f'redis://{os.environ.get("REDIS_HOST","127.0.0.1")}:{os.environ.get("REDIS_PORT","6379")}')
+        f'redis://{os.environ.get("REDIS_HOST",resolve_host())}:{os.environ.get("REDIS_PORT","6379")}')
 
 
 def resolve_backup_redis():
-    return os.environ.get('BACKUP_REDIS_URL',None)
+    if 'BACKUP_REDIS_URL' in os.environ:
+        return os.environ.get('BACKUP_REDIS_URL', None)
+    else:
+        if 'BACKUP_REDIS_HOST' in os.environ.keys() or 'BACKUP_REDIS_PORT' in os.environ.keys():
+            return f'redis://{os.environ.get("BACKUP_REDIS_HOST",resolve_host())}:{os.environ.get("BACKUP_REDIS_PORT","6379")}'
+        else:
+            return None
 
 
 def resolve_mbb_retries():

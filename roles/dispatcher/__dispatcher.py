@@ -71,27 +71,27 @@ class Dispatcher(object):
             except redis.exceptions.ConnectionError as e:
                 error('Redis server not reachable.\n')
                 time.sleep(connection_sleep)
-            back = resolve_backup_redis()
-            if back is None:
-                error(
-                    f'Did not manage to connect to redis server after {connection_attempts} tries. Exiting the application.\n')
+        back = resolve_backup_redis()
+        if back is None:
+            error(
+                f'Did not manage to connect to redis server after {connection_attempts} tries. Exiting the application.\n')
+            self.daemon.shutdown()
+            exit(1)
+        else:
+            error(
+                f'Did not manage to connect to redis server after {connection_attempts} tries. Trying to connect to backup dispatcher.\n')
+            try:
+                print(f"URL:{resolve_backup_redis()}\n")
+                self.r_server = redis.from_url(back, decode_responses=True)
+                if not self.r_server.ping():
+                    raise redis.exceptions.ConnectionError(
+                        "Connection to backup redis server failed.")
+                print(f"Connected to backup redis server.\n", style="c_good")
+                return
+            except redis.exceptions.ConnectionError as e:
+                error(f"Backup redis server unreachable.\n")
                 self.daemon.shutdown()
                 exit(1)
-            else:
-                error(
-                    f'Did not manage to connect to redis server after {connection_attempts} tries. Trying to connect to backup dispatcher.\n')
-                try:
-                    print(f"URL:{resolve_backup_redis()}\n")
-                    self.r_server = redis.from_url(back, decode_responses=True)
-                    if not self.r_server.ping():
-                        raise redis.exceptions.ConnectionError(
-                            "Connection to backup redis server failed.")
-                    print(f"Connected to backup redis server.\n", style="c_good")
-                    return
-                except redis.exceptions.ConnectionError as e:
-                    error(f"Backup redis server unreachable.\n")
-                    self.daemon.shutdown()
-                    exit(1)
 
     def _send_pending(self, url: List[str]):
         '''

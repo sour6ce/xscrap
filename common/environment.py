@@ -27,7 +27,7 @@ def resolve_dispatcher():
 
 
 def resolve_backup_dispatcher():
-    return os.environ.get('BACKUP_DISPATCHER', None)
+    return os.environ.get('BACKUP_DISPATCHER', None if 'BACKUP_DISPATCHER_PORT' not in os.environ.keys() else resolve_host())
 
 
 def resolve_dispatcher_port():
@@ -35,7 +35,7 @@ def resolve_dispatcher_port():
 
 
 def resolve_backup_dispatcher_port():
-    if 'BACKUP_DISPATCHER_PORT' in os.environ.keys():
+    if 'BACKUP_DISPATCHER_PORT' in os.environ.keys() or 'BACKUP_DISPATCHER' in os.environ.keys():
         return int(os.environ.get('BACKUP_DISPATCHER_PORT', 8000))
     else:
         return None

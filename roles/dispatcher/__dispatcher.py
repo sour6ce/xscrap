@@ -176,7 +176,7 @@ class Dispatcher(object):
             new_worker_name=f"Worker_{p.pid}@{socket.gethostname()}"
             self.worker_timestamps[new_worker_name]=datetime.now()
             
-            self.spawned_workers[new_worker_name]=p.
+            self.spawned_workers[new_worker_name]=p
             log(f"Spawned worker: {new_worker_name}")
                 
     def _retrieve_cache_single(self, url: str) -> dict | None:

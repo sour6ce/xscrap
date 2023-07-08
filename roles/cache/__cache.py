@@ -19,9 +19,9 @@ class Cache(object):
         instead the object is created when a node is needed of the Pyro object.
         '''
         self.daemon = daemon
-        self.pending_set: set
-        self.pending_queue: Queue
-        self.url_cache: dict
+        self.pending_set: set = set()
+        self.pending_queue: Queue = Queue()
+        self.url_cache: dict = dict()
     
     def ps_ismember(self, url: str) -> bool:
         return self.pending_set.__contains__(url)

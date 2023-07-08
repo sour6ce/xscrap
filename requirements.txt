@@ -8,3 +8,4 @@ uvicorn==0.22.0
 fastapi==0.96.0
 pydantic==1.10.8
 sse_starlette==1.6.1
+sortedcontainers==2.4.0

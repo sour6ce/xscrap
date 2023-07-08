@@ -1,5 +1,5 @@
 import asyncio
-from subprocess import Popen
+from subprocess import DEVNULL, Popen
 import sys
 import queue
 import time
@@ -175,7 +175,8 @@ class Dispatcher(object):
             for _ in range(num_workers):
                 c_env=os.environ
                 c_env.update({'DISPATCHER_PORT':str(resolve_hostport())})
-                p = Popen([sys.executable,os.path.abspath(sys.argv[0]),"worker"], env=c_env)
+                p = Popen([sys.executable,os.path.abspath(sys.argv[0]),"worker"], env=c_env, 
+                          stdout=DEVNULL, stdin=DEVNULL, stderr=DEVNULL)
                 
                 new_worker_name=f"Worker_{p.pid}@{socket.gethostname()}"
                 self.worker_timestamps[new_worker_name]=datetime.now()

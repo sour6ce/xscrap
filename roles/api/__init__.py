@@ -25,8 +25,8 @@ __spawning_dispatcher=False
 
 def undying_get_dispatcher():
     global __spawning_dispatcher
-    while not check_is_there():
-        if not __spawning_dispatcher:
+    if not __spawning_dispatcher:
+        while not check_is_there():
             try:
                 get_dispatcher()
             except Exception as e:
@@ -48,6 +48,7 @@ def undying_get_dispatcher():
                     else:
                         log(f"Spawned dispatcher at: {resolve_cache_server()}")
                         __spawning_dispatcher=False
+                        return get_dispatcher()
                 
         time.sleep(4)
             

@@ -74,7 +74,7 @@ def start():
                 try: 
                     placework(dispatcher, urls)  # Send the work
                 except CommunicationError or NamingError:
-                    dispatcher = get_dispatcher(CLIENT_CONNECTION_RETRIES)
+                    dispatcher = get_dispatcher()
                     if dispatcher is None:
                         error('Dispatcher not reachable. Try again. (Previous urls saved)\n\n')
                         continue

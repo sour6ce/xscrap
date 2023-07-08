@@ -5,7 +5,6 @@ from Pyro5.api import serve, Daemon
 
 from .__dispatcher import *
 
-
 def start():
     # Beauty printing. To details go to common.printing
     print('-- [c_beauty]XSCRAP[/c_beauty] DISPATCHER --', justify='center')

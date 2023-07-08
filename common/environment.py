@@ -49,20 +49,10 @@ def resolve_api_port():
     return int(os.environ.get('API_PORT', os.environ.get('HOSTPORT', 8000)))
 
 
-def resolve_redis():
+def resolve_cache_server():
     return os.environ.get(
-        'REDIS_URL',
-        f'redis://{os.environ.get("REDIS_HOST",resolve_host())}:{os.environ.get("REDIS_PORT","6379")}')
-
-
-def resolve_backup_redis():
-    if 'BACKUP_REDIS_URL' in os.environ:
-        return os.environ.get('BACKUP_REDIS_URL', None)
-    else:
-        if 'BACKUP_REDIS_HOST' in os.environ.keys() or 'BACKUP_REDIS_PORT' in os.environ.keys():
-            return f'redis://{os.environ.get("BACKUP_REDIS_HOST",resolve_host())}:{os.environ.get("BACKUP_REDIS_PORT","6379")}'
-        else:
-            return None
+        'CACHE_SERVER_URL',
+        f'PYRO:xscrap.cache@{os.environ.get("CACHE_SERVER_HOST",resolve_host())}:{os.environ.get("CACHE_SERVER_PORT","6379")}')
 
 
 def resolve_mbb_retries():

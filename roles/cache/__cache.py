@@ -45,7 +45,7 @@ class Cache(object):
         return self.pending_queue._qsize()
     
     def p_lpop(self) -> str:
-        return self.pending_queue.get()
+        return self.pending_queue.get(False)
     
     def ps_srem(self, url: str):
         if self.pending_set.__contains__(url):

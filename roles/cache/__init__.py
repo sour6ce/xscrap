@@ -11,7 +11,7 @@ def start():
     print('-- [c_beauty]XSCRAP[/c_beauty] CACHE SERVER --', justify='center')
     print('\nInitializing cache server.\n')
     # Main Daemon
-    daemon = Daemon(host=resolve_host(), port=int(os.environ.get("CACHE_SERVER_PORT","6379")))
+    daemon = Daemon(host=resolve_cache_host(), port=resolve_cache_port())
     URI = daemon.register(Cache(daemon), objectId='xscrap.cache')
 
     print(f"URI:{URI}\n")

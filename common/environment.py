@@ -52,13 +52,21 @@ def resolve_api_host():
 
 
 def resolve_api_port():
-    return int(os.environ.get('API_PORT', os.environ.get('HOSTPORT', 8000)))
+    return int(os.environ.get('API_PORT', os.environ.get('HOSTPORT', 6900)))
+
+
+def resolve_cache_host():
+    return os.environ.get('CACHE_SERVER_HOST', resolve_host())
+
+
+def resolve_cache_port():
+    return int(os.environ.get('API_PORT', os.environ.get('HOSTPORT', 6380)))
 
 
 def resolve_cache_server():
     return os.environ.get(
         'CACHE_SERVER_URL',
-        f'PYRO:xscrap.cache@{os.environ.get("CACHE_SERVER_HOST",resolve_host())}:{os.environ.get("CACHE_SERVER_PORT","6379")}')
+        f'PYRO:xscrap.cache@{resolve_cache_host()}:{resolve_cache_port()}')
 
 
 def resolve_mbb_retries():

@@ -10,21 +10,6 @@ from Pyro5.api import Daemon, Proxy, behavior, current_context, expose
 from Pyro5.errors import CommunicationError, NamingError
 from typing_extensions import overload
 
-###############################################################################
-#                                                                             #
-# There are two major data stored in redis server: Pending and Cache
-# NOTE: Is possible in the future to separate this in two redis servers
-#
-# Pending is a list that works as a queue of URLs that needs to be worked
-#
-# Cache works as a result storage of all the URLs worked. While an url is at
-# cache is assumed to be "worked" and can be returned to client.
-#
-# Due to nature of results it is recommended to use random key eviction in
-# to help forcing a cached page to be fetched again sometimes.
-#                                                                             #
-###############################################################################
-
 @expose
 @behavior(instance_mode="single")
 class Cache(object):

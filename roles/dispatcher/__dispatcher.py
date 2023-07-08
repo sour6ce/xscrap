@@ -9,22 +9,8 @@ from common.printing import *
 from Pyro5.api import Daemon, Proxy, behavior, current_context, expose
 from Pyro5.errors import CommunicationError, NamingError
 from typing_extensions import overload
-from ._cache import Cache
+from roles.cache.__cache import Cache
 
-###############################################################################
-#                                                                             #
-# There are two major data stored in redis server: Pending and Cache
-# NOTE: Is possible in the future to separate this in two redis servers
-#
-# Pending is a list that works as a queue of URLs that needs to be worked
-#
-# Cache works as a result storage of all the URLs worked. While an url is at
-# cache is assumed to be "worked" and can be returned to client.
-#
-# Due to nature of results it is recommended to use random key eviction in
-# to help forcing a cached page to be fetched again sometimes.
-#                                                                             #
-###############################################################################
 PENDING_KEY = 'pending'
 CACHE_KEY_PREFIX = 'cache'
 PENDING_SET_KEY = 'pending_set'
@@ -43,9 +29,7 @@ class Dispatcher(object):
         Here he checks for the first time if the redis server is up.
         '''
         self.daemon = daemon
-        self.cache: Cache
-        self.cache = Proxy(
-                        f'PYRO:xscrap.cache@{resolve_host()}:{resolve_hostport()}')
+        self.cache = Proxy(resolve_cache_server())
         uri = self.cache._pyroUri
         # Good
         print(
@@ -101,12 +85,12 @@ class Dispatcher(object):
     def get_work(self, count: int = 1) -> List[str]:
         log(f'Request for a job.')
 
-        len = self.cache.p_llen()
-        if len < count:
+        url: str = ''
+        try:
+            url = self.cache.p_lpop()
+        except:
             log(f"Not enough jobs available for a request.")
             raise ValueError("Not enough jobs in queue")
-        url: str = ''
-        url = self.cache.p_lpop()
         self.cache.ps_srem(url)
         log(f'Job given: {url}.')
         return url

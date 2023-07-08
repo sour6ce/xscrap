@@ -11,6 +11,7 @@ import socket
 def resolve_docker():
     return 'IN_DOCKER' in os.environ.keys()
 
+
 def resolve_host():
     if resolve_docker(): return '0.0.0.0'
     return os.environ.get('HOSTNAME', socket.gethostname())
@@ -54,9 +55,17 @@ def resolve_cache_server():
         'CACHE_SERVER_URL',
         f'PYRO:xscrap.cache@{os.environ.get("CACHE_SERVER_HOST",resolve_host())}:{os.environ.get("CACHE_SERVER_PORT","6379")}')
 
+def resolve_pending_queue_maxsize():
+    return int(os.environ.get('PENDING_QUEUE_MAXSIZE', '100000'))
+
+
+def resolve_cache_maxsize():
+    return int(os.environ.get('CACHE_MAXSIZE', '1000000'))
+
 
 def resolve_mbb_retries():
     return int(os.environ.get('MBB_RETRIES',5))
+
 
 def resolve_mbb_time():
     return int(os.environ.get('MBB_TIME',1))

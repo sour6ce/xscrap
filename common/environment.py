@@ -11,6 +11,9 @@ import socket
 def resolve_docker():
     return 'IN_DOCKER' in os.environ.keys()
 
+def resolve_workertiemout():
+    return int(os.environ.get('WORKER_TIMEOUT', 300))
+
 def resolve_host():
     if resolve_docker(): return '0.0.0.0'
     return os.environ.get('HOSTNAME', socket.gethostname())

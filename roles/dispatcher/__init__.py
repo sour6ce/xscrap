@@ -4,6 +4,7 @@ from common.setup import *
 from Pyro5.api import serve, Daemon
 
 from .__dispatcher import *
+from ._cache import *
 
 
 def start():
@@ -12,6 +13,7 @@ def start():
     print('\nInitializing dispatcher.\n')
     # Main Daemon
     daemon = Daemon(host=resolve_host(), port=resolve_hostport())
+    URI = daemon.register(Cache(daemon), objectId='xscrap.cache')
     URI = daemon.register(Dispatcher(daemon), objectId='xscrap.dispatcher')
 
     print(f"URI:{URI}\n")

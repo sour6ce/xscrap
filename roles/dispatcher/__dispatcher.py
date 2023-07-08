@@ -3,6 +3,8 @@ import queue
 import time
 from typing import Any, List
 
+from datetime import datetime, timedelta
+
 import redis
 from common.environment import *
 from common.job import Job
@@ -43,6 +45,10 @@ class Dispatcher(object):
         Here he checks for the first time if the redis server is up.
         '''
         self.daemon = daemon
+        
+        self.worker_timestamps = {}
+        self.worker_timeout = timedelta(seconds=resolve_workertiemout())
+        
         self.check_redis()
         print(
             "Dispatched initialized for first time successfully.\n\n",
@@ -131,6 +137,21 @@ class Dispatcher(object):
         '''Delete the cache result for a list of urls.'''
         _ = [self._clear_cache_single(url) for url in urls]
 
+    #Function added
+    def _update_worker_timestamp(self, worker_id):
+        self.worker_timestamps[worker_id] = datetime.now()
+    
+    #Function added
+    def _check_for_dead_workers(self):
+        now = datetime.now()
+        dead_workers = [worker for worker, timestamp in self.worker_timestamps.items() if now - timestamp > self.worker_timeout]
+
+        for worker in dead_workers:
+            del self.worker_timestamps[worker]
+
+        if len(self.worker_timestamps) < self.min_workers:
+            self._spawn_new_workers(self.min_workers - len(self.worker_timestamps))
+    
     def _retrieve_cache_single(self, url: str) -> dict | None:
         '''Retrieve result stored for a given url. If there's no cache for that url return None.'''
         result = None
@@ -154,7 +175,8 @@ class Dispatcher(object):
         self.clear_cache(urls)
         self._send_pending(urls)
 
-    def get_work(self, count: int = 1) -> List[str]:
+    def get_work(self, worker_id, count: int = 1) -> List[str]:
+        self._update_worker_timestamp(worker_id)
         log(f'Request for a job.')
 
         len= None
@@ -205,7 +227,8 @@ class Dispatcher(object):
 
         return [url] if isinstance(url, str) else url
 
-    def put_result(self, url: str, body: str, status_code: int = 200):
+    def put_result(self, worker_id, url: str, body: str, status_code: int = 200):
+        self._update_worker_timestamp(worker_id)
         log(f'Arrived result for job: {url} with status {status_code}')
         try:
             self.r_server.set(

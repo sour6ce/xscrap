@@ -60,7 +60,7 @@ def resolve_cache_host():
 
 
 def resolve_cache_port():
-    return int(os.environ.get('API_PORT', os.environ.get('HOSTPORT', 6380)))
+    return int(os.environ.get('CACHE_SERVER_PORT', os.environ.get('HOSTPORT', 6380)))
 
 
 def resolve_cache_server():

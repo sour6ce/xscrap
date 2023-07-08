@@ -1,4 +1,6 @@
 import asyncio
+from subprocess import Popen
+from sys import argv
 import queue
 import time
 from typing import Any, List
@@ -142,16 +144,26 @@ class Dispatcher(object):
         self.worker_timestamps[worker_id] = datetime.now()
     
     #Function added
-    def _check_for_dead_workers(self):
+    def _check_workers(self):
         now = datetime.now()
         dead_workers = [worker for worker, timestamp in self.worker_timestamps.items() if now - timestamp > self.worker_timeout]
 
         for worker in dead_workers:
             del self.worker_timestamps[worker]
 
-        if len(self.worker_timestamps) < self.min_workers:
-            self._spawn_new_workers(self.min_workers - len(self.worker_timestamps))
+        if len(self.worker_timestamps) < resolve_worker_amount():
+            self._spawn_new_workers(resolve_worker_amount() - len(self.worker_timestamps))
     
+    #Function added
+    def _spawn_new_workers(self, num_workers):
+        for _ in range(num_workers):
+            c_env=os.environ
+            c_env.update({'DISPATCHER_PORT':c_env['HOSTPORT']})
+            p = Popen([argv[0],argv[1],"worker"], env=c_env)
+            
+            new_worker_name=f"Worker_{p.pid}@{socket.gethostname()}"
+            self.worker_timestamps[new_worker_name]=datetime.now()
+                
     def _retrieve_cache_single(self, url: str) -> dict | None:
         '''Retrieve result stored for a given url. If there's no cache for that url return None.'''
         result = None
@@ -168,6 +180,7 @@ class Dispatcher(object):
         return [self._retrieve_cache_single(url) for url in urls]
 
     def put_work(self, urls: List[str]):
+        
         sep = "\n\t"
         log(f'Arrived batch job: \n[\n\t{sep.join(urls)}\n]')
 

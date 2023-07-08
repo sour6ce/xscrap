@@ -48,7 +48,8 @@ class Cache(object):
         self.pending_queue.put(url)
     
     def uc_delete(self, url: str):
-        self.url_cache.pop(url)
+        if self.url_cache.__contains__(url):
+            self.url_cache.pop(url)
     
     def uc_get(self, url: str) -> (str | None):
         if self.url_cache.__contains__(url):
@@ -62,7 +63,8 @@ class Cache(object):
         return self.pending_queue.get()
     
     def ps_srem(self, url: str):
-        self.pending_set.discard(url)
+        if self.pending_set.__contains__(url):
+            self.pending_set.discard(url)
     
     def uc_set(self, url: str, body: str):
         self.url_cache[url] = body

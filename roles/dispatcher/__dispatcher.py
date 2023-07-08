@@ -7,28 +7,14 @@ from typing import Any, Dict, List
 
 from datetime import datetime, timedelta
 
-import redis
 from common.environment import *
 from common.job import Job
 from common.printing import *
 from Pyro5.api import Daemon, Proxy, behavior, current_context, expose
 from Pyro5.errors import CommunicationError, NamingError
 from typing_extensions import overload
+from roles.cache.__cache import Cache
 
-###############################################################################
-#                                                                             #
-# There are two major data stored in redis server: Pending and Cache
-# NOTE: Is possible in the future to separate this in two redis servers
-#
-# Pending is a list that works as a queue of URLs that needs to be worked
-#
-# Cache works as a result storage of all the URLs worked. While an url is at
-# cache is assumed to be "worked" and can be returned to client.
-#
-# Due to nature of results it is recommended to use random key eviction in
-# to help forcing a cached page to be fetched again sometimes.
-#                                                                             #
-###############################################################################
 PENDING_KEY = 'pending'
 CACHE_KEY_PREFIX = 'cache'
 PENDING_SET_KEY = 'pending_set'
@@ -54,55 +40,15 @@ class Dispatcher(object):
         self.spawned_workers:Dict[str,Popen] = {}
         self.worker_timeout = timedelta(seconds=resolve_workertiemout())
         
-        self.check_redis()
+        self.cache = Proxy(resolve_cache_server())
+        uri = self.cache._pyroUri
+        # Good
+        print(
+            f'Successfully connected to cache server in {uri.host}:{uri.port}\n',
+            style='c_good')
         print(
             "Dispatched initialized for first time successfully.\n\n",
             style="c_good")
-
-    def check_redis(self):
-        '''Check if there is connection to the redis server.'''
-        print("Checking connection to redis server.\n")
-        print(f"URL:{resolve_redis()}\n")
-        connection_attempts = resolve_mbb_retries()
-        connection_sleep = resolve_mbb_time()
-
-        # Checking if dispatcher is up
-        retries_count = 0
-        # Note that when connection_attempts is set to 0, it tries to connect indefinitely
-        while connection_attempts == 0 or retries_count < connection_attempts:
-            try:
-                self.r_server = redis.from_url(
-                    resolve_redis(),
-                    decode_responses=True)
-                if not self.r_server.ping():
-                    raise redis.exceptions.ConnectionError(
-                        "Connection to redis server failed.")
-                print(f"Connected to redis server.\n", style="c_good")
-                return
-            except redis.exceptions.ConnectionError as e:
-                error('Redis server not reachable.\n')
-                time.sleep(connection_sleep)
-        back = resolve_backup_redis()
-        if back is None:
-            error(
-                f'Did not manage to connect to redis server after {connection_attempts} tries. Exiting the application.\n')
-            self.daemon.shutdown()
-            exit(1)
-        else:
-            error(
-                f'Did not manage to connect to redis server after {connection_attempts} tries. Trying to connect to backup dispatcher.\n')
-            try:
-                print(f"URL:{resolve_backup_redis()}\n")
-                self.r_server = redis.from_url(back, decode_responses=True)
-                if not self.r_server.ping():
-                    raise redis.exceptions.ConnectionError(
-                        "Connection to backup redis server failed.")
-                print(f"Connected to backup redis server.\n", style="c_good")
-                return
-            except redis.exceptions.ConnectionError as e:
-                error(f"Backup redis server unreachable.\n")
-                self.daemon.shutdown()
-                exit(1)
 
     def _send_pending(self, url: List[str]):
         '''
@@ -113,30 +59,16 @@ class Dispatcher(object):
             return
         # Lock forces to allow only this method to change values in that key
         for urlx in url:
-            try:
-                with self.r_server.lock(PENDING_SET_KEY+"_lock_", thread_local=False):
-                    if self.r_server.sismember(PENDING_SET_KEY, urlx):
-                        return
-                    self.r_server.sadd(PENDING_SET_KEY, urlx)
-            except redis.exceptions.ConnectionError:
-                error('Redis server unavaliable.\n')
-                self.check_redis()
-            try:
-                with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
-                    self.r_server.rpush(PENDING_KEY, urlx)
-            except redis.exceptions.ConnectionError:
-                error('Redis server unavaliable.\n')
-                self.check_redis()
+            with Proxy(resolve_cache_server()) as cache:
+                if cache.ps_ismember(urlx):
+                    return
+                cache.ps_add(urlx)
+                cache.p_push(urlx)
 
     def _clear_cache_single(self, url: str):
         '''Delete the cache result for a given url.'''
-        url_key = build_cache_key(url)
-        try:
-            with self.r_server.lock(url_key+"_lock_", thread_local=False):
-                self.r_server.delete(url_key)
-        except redis.exceptions.ConnectionError:
-            error('Redis server unavaliable.\n')
-            self.check_redis()
+        with Proxy(resolve_cache_server()) as cache:
+            cache.uc_delete(build_cache_key(url))
 
     def clear_cache(self, urls: List[str]):
         '''Delete the cache result for a list of urls.'''
@@ -189,11 +121,10 @@ class Dispatcher(object):
         '''Retrieve result stored for a given url. If there's no cache for that url return None.'''
         result = None
         try:
-            result = self.r_server.get(build_cache_key(url))
-        except redis.exceptions.ConnectionError:
-            error('Redis server unavaliable\n')
-            self.check_redis()
-            result = self.r_server.get(build_cache_key(url))
+            with Proxy(resolve_cache_server()) as cache:
+                result = cache.uc_get(build_cache_key(url))
+        except:
+            result = None
         return result if result is None else eval(result)
 
     def _retrieve_cache(self, urls: List[str]) -> List[dict | None]:
@@ -214,67 +145,24 @@ class Dispatcher(object):
         self._update_worker_timestamp(worker_id)
         log(f'Request for a job.')
 
-        len= None
-
-        try:
-            len = self.r_server.llen(PENDING_KEY)
-        except redis.exceptions.ConnectionError:
-            error('Redis server unavaliable\n')
-            self.check_redis()
-            len = self.r_server.llen(PENDING_KEY)
-
-        if len < count:
-            log(f"Not enough jobs available for a request.")
-            raise ValueError("Not enough jobs in queue")
-
         url: str = ''
-
-        try:
-            with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
-                url = self.r_server.lpop(PENDING_KEY)
-        except redis.exceptions.ConnectionError:
-            error('Redis server unavaliable\n')
-            self.check_redis()
-            with self.r_server.lock(PENDING_KEY+"_lock_", thread_local=False):
-                url = self.r_server.lpop(PENDING_KEY)
-
-        if isinstance(url, str):
+        with Proxy(resolve_cache_server()) as cache:
             try:
-                with self.r_server.lock(PENDING_SET_KEY+"_lock_", thread_local=False):
-                    self.r_server.srem(PENDING_SET_KEY, url)
-            except redis.exceptions.ConnectionError:
-                error('Redis server unavaliable\n')
-                self.check_redis()
-                with self.r_server.lock(PENDING_SET_KEY+"_lock_", thread_local=False):
-                    self.r_server.srem(PENDING_SET_KEY, url)
-        else:
-            for urlx in url:
-                try:
-                    with self.r_server.lock(PENDING_SET_KEY+"_lock_", thread_local=False):
-                        self.r_server.srem(PENDING_SET_KEY, urlx)
-                except redis.exceptions.ConnectionError:
-                    error('Redis server unavaliable\n')
-                    self.check_redis()
-                    with self.r_server.lock(PENDING_SET_KEY+"_lock_", thread_local=False):
-                        self.r_server.srem(PENDING_SET_KEY, urlx)
-
+                url = cache.p_lpop()
+            except:
+                log(f"Not enough jobs available for a request.")
+                raise ValueError("Not enough jobs in queue")
+            cache.ps_srem(url)
         log(f'Job given: {url}.')
-
-        return [url] if isinstance(url, str) else url
+        return [url]
 
     def put_result(self, worker_id, url: str, body: str, status_code: int = 200):
         self._update_worker_timestamp(worker_id)
         log(f'Arrived result for job: {url} with status {status_code}')
-        try:
-            self.r_server.set(
-                build_cache_key(url),
-                repr({'body': body, 'status': status_code}))
-        except redis.exceptions.ConnectionError:
-            error('Redis server unavaliable\n')
-            self.check_redis()
-            self.r_server.set(
-                build_cache_key(url),
-                repr({'body': body, 'status': status_code}))
+        
+        with Proxy(resolve_cache_server()) as cache:
+            cache.uc_set(build_cache_key(url),
+                         repr({'body': body, 'status': status_code}))
 
     def get_result(self, urls: List[str]) -> List[dict | None]:
         sep = "\n\t"
@@ -294,20 +182,8 @@ class Dispatcher(object):
         return self.get_result([url])[0]
 
     def pending_size(self):
-        try:
-            return self.r_server.llen(PENDING_KEY)
-        except redis.exceptions.ConnectionError:
-            error('Redis server unavaliable\n')
-            self.check_redis()
-            return self.r_server.llen(PENDING_KEY)
-
-    def cache_size(self):
-        try:
-            return self.r_server.dbsize() - 1
-        except redis.exceptions.ConnectionError:
-            error('Redis server unavaliable\n')
-            self.check_redis()
-            return self.r_server.dbsize() - 1
+        with Proxy(resolve_cache_server()) as cache:
+            return cache.p_llen()
 
     def get_backup(self):
         return (resolve_backup_dispatcher(), resolve_backup_dispatcher_port())

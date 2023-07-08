@@ -64,7 +64,7 @@ class Dispatcher(object):
                 self.__spawning_cache=True
                 log("Spawning local cache...")
                 os.environ['CACHE_SERVER_HOST']=resolve_host()
-                os.environ['CACHE_SERVER_PORT']=str(resolve_api_port())
+                os.environ['CACHE_SERVER_PORT']=str(resolve_cache_port())
                 
                 try:
                     _ = Popen([sys.executable,os.path.abspath(sys.argv[0]),"cache"], 
@@ -290,7 +290,8 @@ def get_dispatcher():
                 )
             if not any(__stored_backup):
                 error(
-                    f'Did not manage to connect to dispatcher after {connection_attempts} tries. Exiting the application.\n')
+                    f'Did not manage to connect to dispatcher after {connection_attempts} tries.\n')
+                raise Exception("XSCRAP:Orphan:f'Did not manage to connect to dispatcher after {connection_attempts} tries")
                 exit(1)
             else:
                 error(
@@ -312,7 +313,7 @@ def get_dispatcher():
                     exit(0)
                 except CommunicationError as e:
                     error('Backup dispatcher not reachable.\n')
-                    exit(1)
+                    raise Exception("XSCRAP:Orphan:Backup dispatcher not reachable")
                 else:
                     __stored_backup = dispatcher.get_backup()
                     return dispatcher

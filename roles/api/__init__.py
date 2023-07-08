@@ -1,4 +1,6 @@
 import asyncio
+from subprocess import DEVNULL, Popen
+import sys
 import time
 from math import log2
 from random import random
@@ -10,8 +12,9 @@ from fastapi import FastAPI, Request
 from pydantic import AnyUrl, BaseModel
 from Pyro5.api import Proxy
 from Pyro5.errors import CommunicationError
-from roles.dispatcher import Dispatcher, get_dispatcher
+from roles.dispatcher import Dispatcher, get_dispatcher, check_is_there
 from sse_starlette.sse import EventSourceResponse
+from common.printing import *
 
 app = FastAPI()
 
@@ -19,17 +22,40 @@ WAIT_INCREMENT = 0.5
 WAIT_REDUCTION = 2
 
 
+
+def undying_get_dispatcher():
+    while not check_is_there():
+        if str(e).startswith('XSCRAP:Orphan'):
+            log("Dispatcher node missing.")
+            log("Spawning dispatcher...")
+            
+            os.environ['DISPATCHER']=resolve_host()
+            os.environ['DISPATCHER_PORT']=str(resolve_dispatcher_port())
+            
+            try:
+                _ = Popen([sys.executable,os.path.abspath(sys.argv[0]),"dispatcher"], 
+                        stdout=DEVNULL, stdin=DEVNULL, stderr=DEVNULL)
+            except Exception as e:
+                error("Local dispatcher can't be spawned. Reason:")
+                print(e)
+                print('\n')
+                break
+            
+            log(f"Spawned dispatcher at: {resolve_cache_server()}")
+            
+    return get_dispatcher()
+
 def fetch_result(url: str):
     '''
     Tries to get the result for scrapping the URL and keeps trying until it has it
     '''
     wait_time = 1
-    dispatcher = get_dispatcher()
+    dispatcher = undying_get_dispatcher()
     while True:
         try:
             r = dispatcher.get_result_single(url)
         except CommunicationError:
-            dispatcher = get_dispatcher()
+            dispatcher = undying_get_dispatcher()
             r = dispatcher.get_result_single(url)
         if r is not None:
             wait_time = 1
@@ -45,11 +71,11 @@ def request_result(urls: List[str]):
     # TODO: Improve this behavior.
     # The goal of this is to enqueue all needed url before you try with fetch_result
     # to have the result
-    dispatcher = get_dispatcher()
+    dispatcher = undying_get_dispatcher()
     try:
         dispatcher.get_result(urls)
     except CommunicationError:
-        dispatcher = get_dispatcher()
+        dispatcher = undying_get_dispatcher()
         dispatcher.get_result(urls)
 
 
@@ -77,11 +103,11 @@ async def scrap(request: Request, batch: Batch):
 
 @app.post("/reset")
 async def scrap(request: Request, batch: Batch):
-    dispatcher = get_dispatcher()
+    dispatcher = undying_get_dispatcher()
     try:
         dispatcher.clear_cache(batch.urls)
     except CommunicationError:
-        dispatcher = get_dispatcher()
+        dispatcher = undying_get_dispatcher()
         dispatcher.clear_cache(batch.urls)
 
 

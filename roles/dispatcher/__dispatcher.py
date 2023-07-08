@@ -195,6 +195,7 @@ class Dispatcher(object):
         return [self._retrieve_cache_single(url) for url in urls]
 
     def put_work(self, urls: List[str]):
+        self._check_workers()
         
         sep = "\n\t"
         log(f'Arrived batch job: \n[\n\t{sep.join(urls)}\n]')

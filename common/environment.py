@@ -15,7 +15,7 @@ def resolve_worker_amount():
     return int(os.environ.get('WORKER_AMOUNT', 3))
 
 def resolve_workertiemout():
-    return int(os.environ.get('WORKER_TIMEOUT', 300))
+    return int(os.environ.get('WORKER_TIMEOUT', 60))
 
 def resolve_host():
     if resolve_docker(): return '0.0.0.0'

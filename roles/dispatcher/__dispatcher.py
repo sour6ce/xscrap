@@ -48,6 +48,8 @@ class Dispatcher(object):
         '''
         self.daemon = daemon
         
+        self.__spawning=False
+        
         self.worker_timestamps:Dict[str,datetime] = {}
         self.spawned_workers:Dict[str,Popen] = {}
         self.worker_timeout = timedelta(seconds=resolve_workertiemout())
@@ -167,17 +169,20 @@ class Dispatcher(object):
     
     #Function added
     def _spawn_new_workers(self, num_workers):
-        log("Spawning new workers...")
-        for _ in range(num_workers):
-            c_env=os.environ
-            c_env.update({'DISPATCHER_PORT':str(resolve_hostport())})
-            p = Popen([sys.executable,os.path.abspath(sys.argv[0]),"worker"], env=c_env)
-            
-            new_worker_name=f"Worker_{p.pid}@{socket.gethostname()}"
-            self.worker_timestamps[new_worker_name]=datetime.now()
-            
-            self.spawned_workers[new_worker_name]=p
-            log(f"Spawned worker: {new_worker_name}")
+        if not self.__spawning:
+            self.__spawning=True
+            log("Spawning new workers...")
+            for _ in range(num_workers):
+                c_env=os.environ
+                c_env.update({'DISPATCHER_PORT':str(resolve_hostport())})
+                p = Popen([sys.executable,os.path.abspath(sys.argv[0]),"worker"], env=c_env)
+                
+                new_worker_name=f"Worker_{p.pid}@{socket.gethostname()}"
+                self.worker_timestamps[new_worker_name]=datetime.now()
+                
+                self.spawned_workers[new_worker_name]=p
+                log(f"Spawned worker: {new_worker_name}")
+            self.__spawning=False
                 
     def _retrieve_cache_single(self, url: str) -> dict | None:
         '''Retrieve result stored for a given url. If there's no cache for that url return None.'''

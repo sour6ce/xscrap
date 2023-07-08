@@ -109,6 +109,9 @@ class Dispatcher(object):
 
         if len(pending_urls) > 0:
             (self.put_work(pending_urls))
+        else:
+            with Proxy(resolve_cache_server()) as cache:
+                cache.hit(urls)
 
         return r
 

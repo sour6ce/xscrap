@@ -1,21 +1,27 @@
 from queue import Queue
+from typing import List
 from common.environment import *
 from common.printing import *
 from Pyro5.api import Daemon, behavior, expose
 from sortedcontainers import SortedSet
 
+
 @expose
 @behavior(instance_mode="single")
 class Cache(object):
     def __init__(self, daemon: Daemon):
-        '''
+        """
         Constructor for the object, isn't called at start of the dispatcher node,
         instead the object is created when a node is needed of the Pyro object.
-        '''
+        """
         self.daemon = daemon
         self.pending_set: set = set()
         self.pending_queue: Queue = Queue()
         self.url_cache: dict = dict()
+        # stores the number of hits a url had
+        self.hits: dict = dict()
+        # stores <hits, url> tuples in sorted manner, allowing to delete the less frequently used url
+        self.magic_cache_container: SortedSet = SortedSet()
 
     def is_pending(self, url: str) -> bool:
         return self.pending_set.__contains__(url)
@@ -30,7 +36,7 @@ class Cache(object):
         if self.url_cache.__contains__(url):
             self.url_cache.pop(url)
 
-    def cached_response(self, url: str) -> (str | None):
+    def cached_response(self, url: str) -> str | None:
         if self.url_cache.__contains__(url):
             return self.url_cache.get(url)
         return None
@@ -46,6 +52,15 @@ class Cache(object):
             self.pending_set.discard(url)
 
     def update_cache(self, url: str, body: str):
+        if not (
+            self.url_cache.__contains__(url)
+            or len(self.url_cache) < resolve_cache_maxsize()
+        ):
+            # we must delete some item from the cache
+            url = self.magic_cache_container[0][1]
+            self.magic_cache_container.discard(self.magic_cache_container[0])
+            self.hits.pop(url)
+            self.url_cache.pop(url)
         self.url_cache[url] = body
 
     def try_push_to_pending_queue(self, url: str):
@@ -65,3 +80,13 @@ class Cache(object):
             raise ValueError("Not enough jobs in queue")
         self.remove_from_pending_set(url)
         return url
+
+    def hit(self, urls: List[str]):
+        for url in urls:
+            if not self.hits.__contains__(url):
+                self.hits[url] = 1
+                self.magic_cache_container.add((1, url))
+            else:
+                self.magic_cache_container.discard((self.hits[url], url))
+                self.hits[url] += 1
+                self.magic_cache_container.add((self.hits[url], url))

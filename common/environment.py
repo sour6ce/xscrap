@@ -11,6 +11,9 @@ import socket
 def resolve_docker():
     return 'IN_DOCKER' in os.environ.keys()
 
+def resolve_worker_amount():
+    return int(os.environ.get('WORKER_AMOUNT', 3))
+
 def resolve_workertiemout():
     return int(os.environ.get('WORKER_TIMEOUT', 300))
 

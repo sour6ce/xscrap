@@ -21,27 +21,32 @@ app = FastAPI()
 WAIT_INCREMENT = 0.5
 WAIT_REDUCTION = 2
 
-
+__spawning_dispatcher=False
 
 def undying_get_dispatcher():
+    global __spawning_dispatcher
     while not check_is_there():
-        if str(e).startswith('XSCRAP:Orphan'):
-            log("Dispatcher node missing.")
-            log("Spawning dispatcher...")
-            
-            os.environ['DISPATCHER']=resolve_host()
-            os.environ['DISPATCHER_PORT']=str(resolve_dispatcher_port())
-            
-            try:
-                _ = Popen([sys.executable,os.path.abspath(sys.argv[0]),"dispatcher"], 
-                        stdout=DEVNULL, stdin=DEVNULL, stderr=DEVNULL)
-            except Exception as e:
-                error("Local dispatcher can't be spawned. Reason:")
-                print(e)
-                print('\n')
-                break
-            
-            log(f"Spawned dispatcher at: {resolve_cache_server()}")
+        if not __spawning_dispatcher:
+            if str(e).startswith('XSCRAP:Orphan'):
+                log("Dispatcher node missing.")
+                __spawning_dispatcher=True
+                log("Spawning dispatcher...")
+                
+                os.environ['DISPATCHER']=resolve_host()
+                os.environ['DISPATCHER_PORT']=str(resolve_dispatcher_port())
+                
+                try:
+                    _ = Popen([sys.executable,os.path.abspath(sys.argv[0]),"dispatcher"], 
+                            stdout=DEVNULL, stdin=DEVNULL, stderr=DEVNULL)
+                except Exception as e:
+                    error("Local dispatcher can't be spawned. Reason:")
+                    print(e)
+                    print('\n')
+                else:
+                    log(f"Spawned dispatcher at: {resolve_cache_server()}")
+                    __spawning_dispatcher=False
+                
+        time.sleep(4)
             
     return get_dispatcher()
 

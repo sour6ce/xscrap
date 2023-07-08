@@ -73,10 +73,9 @@ class Dispatcher(object):
                     error("Local cache can't be spawned. Reason:")
                     print(e)
                     print('\n')
-                    break
-                
-                log(f"Spawned cache at: {resolve_cache_server()}")
-                self.__spawning_cache=False
+                else:
+                    log(f"Spawned cache at: {resolve_cache_server()}")
+                    self.__spawning_cache=False
             
             time.sleep(4)
                  

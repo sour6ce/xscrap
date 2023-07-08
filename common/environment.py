@@ -56,11 +56,11 @@ def resolve_cache_server():
         f'PYRO:xscrap.cache@{os.environ.get("CACHE_SERVER_HOST",resolve_host())}:{os.environ.get("CACHE_SERVER_PORT","6379")}')
 
 def resolve_pending_queue_maxsize():
-    return int(os.environ.get('PENDING_QUEUE_MAXSIZE', '100000'))
+    return int(os.environ.get('PENDING_QUEUE_MAXSIZE', '10000'))
 
 
 def resolve_cache_maxsize():
-    return int(os.environ.get('CACHE_MAXSIZE', '1000000'))
+    return int(os.environ.get('CACHE_MAXSIZE', '100000'))
 
 
 def resolve_mbb_retries():

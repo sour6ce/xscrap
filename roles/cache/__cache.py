@@ -57,6 +57,9 @@ class Cache(object):
     def try_push_to_pending_queue(self, url: str):
         if self.is_pending(url):
             return
+        if self.pending_size() >= resolve_pending_queue_maxsize():
+            log(f"Pending queue full, job {url} not queued.")
+            raise ValueError("Pending queue full")
         self.insert_to_pending_set(url)
         self.push_to_pending_queue(url)
 

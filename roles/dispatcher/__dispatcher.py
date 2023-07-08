@@ -48,14 +48,16 @@ class Dispatcher(object):
             return
         # Lock forces to allow only this method to change values in that key
         for urlx in url:
-            if self.cache.ps_ismember(urlx):
-                return
-            self.cache.ps_add(urlx)
-            self.cache.p_push(urlx)
+            with Proxy(resolve_cache_server()) as cache:
+                if cache.ps_ismember(urlx):
+                    return
+                cache.ps_add(urlx)
+                cache.p_push(urlx)
 
     def _clear_cache_single(self, url: str):
         '''Delete the cache result for a given url.'''
-        self.cache.uc_delete(build_cache_key(url))
+        with Proxy(resolve_cache_server()) as cache:
+            cache.uc_delete(build_cache_key(url))
 
     def clear_cache(self, urls: List[str]):
         '''Delete the cache result for a list of urls.'''
@@ -65,7 +67,8 @@ class Dispatcher(object):
         '''Retrieve result stored for a given url. If there's no cache for that url return None.'''
         result = None
         try:
-            result = self.cache.uc_get(build_cache_key(url))
+            with Proxy(resolve_cache_server()) as cache:
+                result = cache.uc_get(build_cache_key(url))
         except:
             result = None
         return result if result is None else eval(result)
@@ -86,20 +89,22 @@ class Dispatcher(object):
         log(f'Request for a job.')
 
         url: str = ''
-        try:
-            url = self.cache.p_lpop()
-        except:
-            log(f"Not enough jobs available for a request.")
-            raise ValueError("Not enough jobs in queue")
-        self.cache.ps_srem(url)
+        with Proxy(resolve_cache_server()) as cache:
+            try:
+                url = cache.p_lpop()
+            except:
+                log(f"Not enough jobs available for a request.")
+                raise ValueError("Not enough jobs in queue")
+            cache.ps_srem(url)
         log(f'Job given: {url}.')
-        return url
+        return [url]
 
     def put_result(self, url: str, body: str, status_code: int = 200):
         log(f'Arrived result for job: {url} with status {status_code}')
-        self.cache.uc_set(
-            build_cache_key(url),
-            repr({'body': body, 'status': status_code}))
+        
+        with Proxy(resolve_cache_server()) as cache:
+            cache.uc_set(build_cache_key(url),
+                         repr({'body': body, 'status': status_code}))
 
     def get_result(self, urls: List[str]) -> List[dict | None]:
         sep = "\n\t"
@@ -119,7 +124,8 @@ class Dispatcher(object):
         return self.get_result([url])[0]
 
     def pending_size(self):
-        return self.cache.p_llen()
+        with Proxy(resolve_cache_server()) as cache:
+            return cache.p_llen()
 
     def get_backup(self):
         return (resolve_backup_dispatcher(), resolve_backup_dispatcher_port())

@@ -17,6 +17,13 @@ WORKERNAME = f"Worker_{os.getpid()}@{socket.gethostname()}"
 WAIT_INCREMENT = 1
 WAIT_REDUCTION = 1
 
+def fatal_get_dispatcher():
+    try:
+        return get_dispatcher()
+    except Exception as e:
+        if str(e).startswith('XSCRAP:Orphan'):
+            error('Closing the application.')
+            exit(1)
 
 # Function that actually do the job, should be slow
 def labor(url: str, timeout: int) -> Tuple[int, str]:
@@ -47,7 +54,7 @@ def start(timeout=5):
 
     wait_time = 1
 
-    dispatcher = get_dispatcher()
+    dispatcher = fatal_get_dispatcher()
 
     status = CONSOLE.status("Waiting for job...", spinner='line')
     status.start()
@@ -61,7 +68,7 @@ def start(timeout=5):
             wait_time += WAIT_INCREMENT
         except CommunicationError:
             status.stop()
-            dispatcher = get_dispatcher()
+            dispatcher = fatal_get_dispatcher()
             status.start()
             wait_time = 1
         else:
@@ -88,7 +95,7 @@ def start(timeout=5):
 
             if not check_is_there():
                 status.stop()
-                dispatcher = get_dispatcher()
+                dispatcher = fatal_get_dispatcher()
                 status.start()
 
             dispatcher.put_result(WORKERNAME,job, text, code)

@@ -171,7 +171,7 @@ class Dispatcher(object):
         for _ in range(num_workers):
             c_env=os.environ
             c_env.update({'DISPATCHER_PORT':str(resolve_hostport())})
-            p = Popen([argv[0],argv[1],"worker"], env=c_env)
+            p = Popen([argv[0],os.path.abspath(argv[1]),"worker"], env=c_env)
             
             new_worker_name=f"Worker_{p.pid}@{socket.gethostname()}"
             self.worker_timestamps[new_worker_name]=datetime.now()

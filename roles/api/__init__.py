@@ -5,8 +5,7 @@ from random import random
 from typing import Iterable, List
 
 import uvicorn
-from common.environment import (resolve_api_port, resolve_dispatcher,
-                                resolve_dispatcher_port, resolve_host)
+from common.environment import *
 from fastapi import FastAPI, Request
 from pydantic import AnyUrl, BaseModel
 from Pyro5.api import Proxy
@@ -84,8 +83,7 @@ async def scrap(request: Request, batch: Batch):
     except CommunicationError:
         dispatcher = get_dispatcher()
         dispatcher.clear_cache(batch.urls)
-    
 
 
 def start():
-    uvicorn.run(app, host=resolve_host(), port=resolve_api_port())
+    uvicorn.run(app, host=resolve_api_host(), port=resolve_api_port())

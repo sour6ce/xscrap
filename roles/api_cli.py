@@ -22,6 +22,8 @@ class start():
         response: requests.Response = requests.post(
             f'{api}/scrap', data=Batch(urls=list(urls)).json(), stream=True)
         for line in response.iter_lines():
+            line: bytes
+            line = line.decode()
             if line and 'ping' not in line:  # filter out keep-alive new lines
                 print(line)
 

@@ -55,7 +55,7 @@ def start(timeout=5):
     while True:
         try:
             # In this case the worker just works with one url
-            job = dispatcher.get_work()[0]
+            job = dispatcher.get_work(WORKERNAME)[0]
         except ValueError as e:
             time.sleep(log2(wait_time)/WAIT_REDUCTION)
             wait_time += WAIT_INCREMENT
@@ -91,6 +91,6 @@ def start(timeout=5):
                 dispatcher = get_dispatcher()
                 status.start()
 
-            dispatcher.put_result(job, text, code)
+            dispatcher.put_result(WORKERNAME,job, text, code)
             log(f"Result saved.")
             status.renderable.text = old_status

@@ -1,7 +1,11 @@
 import asyncio
+from subprocess import DEVNULL, Popen
+import sys
 import queue
 import time
-from typing import Any, List
+from typing import Any, Dict, List
+
+from datetime import datetime, timedelta
 
 from common.environment import *
 from common.job import Job
@@ -29,6 +33,13 @@ class Dispatcher(object):
         Here he checks for the first time if the redis server is up.
         '''
         self.daemon = daemon
+        
+        self.__spawning=False
+        
+        self.worker_timestamps:Dict[str,datetime] = {}
+        self.spawned_workers:Dict[str,Popen] = {}
+        self.worker_timeout = timedelta(seconds=resolve_workertiemout())
+        
         self.cache = Proxy(resolve_cache_server())
         uri = self.cache._pyroUri
         # Good
@@ -63,6 +74,49 @@ class Dispatcher(object):
         '''Delete the cache result for a list of urls.'''
         _ = [self._clear_cache_single(url) for url in urls]
 
+    #Function added
+    def _update_worker_timestamp(self, worker_id):
+        self.worker_timestamps[worker_id] = datetime.now()
+    
+    #Function added
+    def _check_workers(self):
+        now = datetime.now()
+        dead_workers = [worker for worker, timestamp in self.worker_timestamps.items() if now - timestamp > self.worker_timeout]
+
+        for worker in dead_workers:
+            del self.worker_timestamps[worker]
+
+        if len(self.worker_timestamps) < resolve_worker_amount():
+            error("Poor worker count.\n")
+            self._spawn_new_workers(resolve_worker_amount() - len(self.worker_timestamps))
+            
+        if len(self.worker_timestamps) > resolve_worker_amount()*2:
+            excessive_count=(len(self.worker_timestamps)-resolve_worker_amount())
+            
+            for _ in range(max(len(self.spawned_workers),excessive_count)):
+                worker_id,process=self.spawned_workers.popitem()
+                process.kill()
+                
+                log(f"Despawned worker: {worker_id}")
+    
+    #Function added
+    def _spawn_new_workers(self, num_workers):
+        if not self.__spawning:
+            self.__spawning=True
+            log("Spawning new workers...")
+            for _ in range(num_workers):
+                c_env=os.environ
+                c_env.update({'DISPATCHER_PORT':str(resolve_hostport())})
+                p = Popen([sys.executable,os.path.abspath(sys.argv[0]),"worker"], env=c_env, 
+                          stdout=DEVNULL, stdin=DEVNULL, stderr=DEVNULL)
+                
+                new_worker_name=f"Worker_{p.pid}@{socket.gethostname()}"
+                self.worker_timestamps[new_worker_name]=datetime.now()
+                
+                self.spawned_workers[new_worker_name]=p
+                log(f"Spawned worker: {new_worker_name}")
+            self.__spawning=False
+                
     def _retrieve_cache_single(self, url: str) -> dict | None:
         '''Retrieve result stored for a given url. If there's no cache for that url return None.'''
         result = None
@@ -78,6 +132,8 @@ class Dispatcher(object):
         return [self._retrieve_cache_single(url) for url in urls]
 
     def put_work(self, urls: List[str]):
+        self._check_workers()
+        
         sep = "\n\t"
         log(f'Arrived batch job: \n[\n\t{sep.join(urls)}\n]')
 
@@ -85,7 +141,8 @@ class Dispatcher(object):
         self.clear_cache(urls)
         self._send_pending(urls)
 
-    def get_work(self, count: int = 1) -> List[str]:
+    def get_work(self, worker_id, count: int = 1) -> List[str]:
+        self._update_worker_timestamp(worker_id)
         log(f'Request for a job.')
 
         url: str = ''
@@ -99,7 +156,8 @@ class Dispatcher(object):
         log(f'Job given: {url}.')
         return [url]
 
-    def put_result(self, url: str, body: str, status_code: int = 200):
+    def put_result(self, worker_id, url: str, body: str, status_code: int = 200):
+        self._update_worker_timestamp(worker_id)
         log(f'Arrived result for job: {url} with status {status_code}')
         
         with Proxy(resolve_cache_server()) as cache:

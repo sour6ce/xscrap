@@ -91,16 +91,13 @@ class Dispatcher(object):
         for urlx in url:
             self.ensure_cache()
             with Proxy(resolve_cache_server()) as cache:
-                if cache.ps_ismember(urlx):
-                    return
-                cache.ps_add(urlx)
-                cache.p_push(urlx)
+                cache.try_push_to_pending_queue(urlx)
 
     def _clear_cache_single(self, url: str):
         '''Delete the cache result for a given url.'''
         self.ensure_cache()
         with Proxy(resolve_cache_server()) as cache:
-            cache.uc_delete(build_cache_key(url))
+            cache.remove_from_cache(build_cache_key(url))
 
     def clear_cache(self, urls: List[str]):
         '''Delete the cache result for a list of urls.'''
@@ -155,7 +152,7 @@ class Dispatcher(object):
         self.ensure_cache()
         try:
             with Proxy(resolve_cache_server()) as cache:
-                result = cache.uc_get(build_cache_key(url))
+                result = cache.cached_response(build_cache_key(url))
         except:
             result = None
         return result if result is None else eval(result)
@@ -181,12 +178,7 @@ class Dispatcher(object):
         url: str = ''
         self.ensure_cache()
         with Proxy(resolve_cache_server()) as cache:
-            try:
-                url = cache.p_lpop()
-            except:
-                log(f"Not enough jobs available for a request.")
-                raise ValueError("Not enough jobs in queue")
-            cache.ps_srem(url)
+            url = cache.yield_pending_url()
         log(f'Job given: {url}.')
         return [url]
 
@@ -196,7 +188,7 @@ class Dispatcher(object):
         
         self.ensure_cache()
         with Proxy(resolve_cache_server()) as cache:
-            cache.uc_set(build_cache_key(url),
+            cache.update_cache(build_cache_key(url),
                          repr({'body': body, 'status': status_code}))
 
     def get_result(self, urls: List[str]) -> List[dict | None]:
@@ -210,6 +202,9 @@ class Dispatcher(object):
 
         if len(pending_urls) > 0:
             (self.put_work(pending_urls))
+        else:
+            with Proxy(resolve_cache_server()) as cache:
+                cache.hit(urls)
 
         return r
 
@@ -219,7 +214,7 @@ class Dispatcher(object):
     def pending_size(self):
         self.ensure_cache()
         with Proxy(resolve_cache_server()) as cache:
-            return cache.p_llen()
+            return cache.pending_size()
 
     def get_backup(self):
         return (resolve_backup_dispatcher(), resolve_backup_dispatcher_port())

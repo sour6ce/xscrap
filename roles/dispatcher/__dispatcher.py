@@ -1,7 +1,11 @@
 import asyncio
+from subprocess import DEVNULL, Popen
+import sys
 import queue
 import time
-from typing import Any, List
+from typing import Any, Dict, List
+
+from datetime import datetime, timedelta
 
 from common.environment import *
 from common.job import Job
@@ -29,15 +33,52 @@ class Dispatcher(object):
         Here he checks for the first time if the redis server is up.
         '''
         self.daemon = daemon
-        self.cache = Proxy(resolve_cache_server())
-        uri = self.cache._pyroUri
+        
+        self.__spawning=False
+        self.__spawning_cache=False
+        
+        self.worker_timestamps:Dict[str,datetime] = {}
+        self.spawned_workers:Dict[str,Popen] = {}
+        self.worker_timeout = timedelta(seconds=resolve_workertiemout())
+        
         # Good
         print(
-            f'Successfully connected to cache server in {uri.host}:{uri.port}\n',
+            f'Successfully connected to cache server in {resolve_cache_host()}:{resolve_cache_port()}\n',
             style='c_good')
         print(
             "Dispatched initialized for first time successfully.\n\n",
             style="c_good")
+
+    def cache_is_there(self):
+        try:
+            cache = Proxy(resolve_cache_server())
+            cache._pyroBind()
+            return True
+        except:
+            return False
+    
+    def ensure_cache(self):
+        while not self.cache_is_there():
+            if not self.__spawning_cache:
+                log("Cache node missing.")
+                self.__spawning_cache=True
+                log("Spawning local cache...")
+                os.environ['CACHE_SERVER_HOST']=resolve_host()
+                os.environ['CACHE_SERVER_PORT']=str(resolve_cache_port())
+                
+                try:
+                    _ = Popen([sys.executable,os.path.abspath(sys.argv[0]),"cache"], 
+                            stdout=DEVNULL, stdin=DEVNULL, stderr=DEVNULL)
+                except Exception as e:
+                    error("Local cache can't be spawned. Reason:")
+                    print(e)
+                    print('\n')
+                else:
+                    log(f"Spawned cache at: {resolve_cache_server()}")
+                    self.__spawning_cache=False
+            
+            time.sleep(4)
+                 
 
     def _send_pending(self, url: List[str]):
         '''
@@ -48,11 +89,13 @@ class Dispatcher(object):
             return
         # Lock forces to allow only this method to change values in that key
         for urlx in url:
+            self.ensure_cache()
             with Proxy(resolve_cache_server()) as cache:
                 cache.try_push_to_pending_queue(urlx)
 
     def _clear_cache_single(self, url: str):
         '''Delete the cache result for a given url.'''
+        self.ensure_cache()
         with Proxy(resolve_cache_server()) as cache:
             cache.remove_from_cache(build_cache_key(url))
 
@@ -60,9 +103,53 @@ class Dispatcher(object):
         '''Delete the cache result for a list of urls.'''
         _ = [self._clear_cache_single(url) for url in urls]
 
+    #Function added
+    def _update_worker_timestamp(self, worker_id):
+        self.worker_timestamps[worker_id] = datetime.now()
+    
+    #Function added
+    def _check_workers(self):
+        now = datetime.now()
+        dead_workers = [worker for worker, timestamp in self.worker_timestamps.items() if now - timestamp > self.worker_timeout]
+
+        for worker in dead_workers:
+            del self.worker_timestamps[worker]
+
+        if len(self.worker_timestamps) < resolve_worker_amount():
+            error("Poor worker count.\n")
+            self._spawn_new_workers(resolve_worker_amount() - len(self.worker_timestamps))
+            
+        if len(self.worker_timestamps) > resolve_worker_amount()*2:
+            excessive_count=(len(self.worker_timestamps)-resolve_worker_amount())
+            
+            for _ in range(max(len(self.spawned_workers),excessive_count)):
+                worker_id,process=self.spawned_workers.popitem()
+                process.kill()
+                
+                log(f"Despawned worker: {worker_id}")
+    
+    #Function added
+    def _spawn_new_workers(self, num_workers):
+        if not self.__spawning:
+            self.__spawning=True
+            log("Spawning new workers...")
+            for _ in range(num_workers):
+                c_env=os.environ
+                c_env.update({'DISPATCHER_PORT':str(resolve_hostport())})
+                p = Popen([sys.executable,os.path.abspath(sys.argv[0]),"worker"], env=c_env, 
+                          stdout=DEVNULL, stdin=DEVNULL, stderr=DEVNULL)
+                
+                new_worker_name=f"Worker_{p.pid}@{socket.gethostname()}"
+                self.worker_timestamps[new_worker_name]=datetime.now()
+                
+                self.spawned_workers[new_worker_name]=p
+                log(f"Spawned worker: {new_worker_name}")
+            self.__spawning=False
+                
     def _retrieve_cache_single(self, url: str) -> dict | None:
         '''Retrieve result stored for a given url. If there's no cache for that url return None.'''
         result = None
+        self.ensure_cache()
         try:
             with Proxy(resolve_cache_server()) as cache:
                 result = cache.cached_response(build_cache_key(url))
@@ -75,6 +162,8 @@ class Dispatcher(object):
         return [self._retrieve_cache_single(url) for url in urls]
 
     def put_work(self, urls: List[str]):
+        self._check_workers()
+        
         sep = "\n\t"
         log(f'Arrived batch job: \n[\n\t{sep.join(urls)}\n]')
 
@@ -82,18 +171,22 @@ class Dispatcher(object):
         self.clear_cache(urls)
         self._send_pending(urls)
 
-    def get_work(self, count: int = 1) -> List[str]:
+    def get_work(self, worker_id, count: int = 1) -> List[str]:
+        self._update_worker_timestamp(worker_id)
         log(f'Request for a job.')
 
         url: str = ''
+        self.ensure_cache()
         with Proxy(resolve_cache_server()) as cache:
             url = cache.yield_pending_url()
         log(f'Job given: {url}.')
         return [url]
 
-    def put_result(self, url: str, body: str, status_code: int = 200):
+    def put_result(self, worker_id, url: str, body: str, status_code: int = 200):
+        self._update_worker_timestamp(worker_id)
         log(f'Arrived result for job: {url} with status {status_code}')
         
+        self.ensure_cache()
         with Proxy(resolve_cache_server()) as cache:
             cache.update_cache(build_cache_key(url),
                          repr({'body': body, 'status': status_code}))
@@ -119,6 +212,7 @@ class Dispatcher(object):
         return self.get_result([url])[0]
 
     def pending_size(self):
+        self.ensure_cache()
         with Proxy(resolve_cache_server()) as cache:
             return cache.pending_size()
 
@@ -190,7 +284,8 @@ def get_dispatcher():
                 )
             if not any(__stored_backup):
                 error(
-                    f'Did not manage to connect to dispatcher after {connection_attempts} tries. Exiting the application.\n')
+                    f'Did not manage to connect to dispatcher after {connection_attempts} tries.\n')
+                raise Exception("XSCRAP:Orphan:f'Did not manage to connect to dispatcher after {connection_attempts} tries")
                 exit(1)
             else:
                 error(
@@ -212,7 +307,7 @@ def get_dispatcher():
                     exit(0)
                 except CommunicationError as e:
                     error('Backup dispatcher not reachable.\n')
-                    exit(1)
+                    raise Exception("XSCRAP:Orphan:Backup dispatcher not reachable")
                 else:
                     __stored_backup = dispatcher.get_backup()
                     return dispatcher

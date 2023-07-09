@@ -45,7 +45,7 @@ class Cache(object):
         return self.pending_queue._qsize()
 
     def retrieve_from_pending_queue(self) -> str:
-        return self.pending_queue.get()
+        return self.pending_queue.get(False)
 
     def remove_from_pending_set(self, url: str):
         if self.pending_set.__contains__(url):
